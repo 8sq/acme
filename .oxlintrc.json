@@ -54,9 +54,6 @@
     "typescript/consistent-return": "off",
     "typescript/no-unsafe-type-assertion": "off",
     "typescript/strict-boolean-expressions": "off",
-    // A type parameter used only in return position is a cast the caller
-    // names, which is how a registry hands back what its caller asked for.
-    "typescript/no-unnecessary-type-parameters": "off",
     "typescript/promise-function-async": [
       "error",
       { "checkArrowFunctions": false }
