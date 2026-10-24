@@ -4,12 +4,17 @@ packages:
 
 # 2 days in minutes
 minimumReleaseAge: 2880
+
+allowBuilds:
+  esbuild: true
+  workerd: true
+
 savePrefix: ""
 
 tasks:
   build:
     dependsOn: ["^build"]
-    outputs: ["dist/**"]
+    outputs: ["build/**"]
   test:
     dependsOn: ["^build"]
     outputs: []
@@ -19,8 +24,21 @@ pipelines:
   check: [test]
 
 catalog:
+  "@cloudflare/vite-plugin": "1.64.0"
+  "@cloudflare/workers-types": "5.20261022.1"
+  "@react-router/dev": "8.5.0"
+  "@react-router/serve": "8.5.0"
+  "@types/node": "24.19.2"
+  "@types/react": "19.3.0"
+  "@types/react-dom": "19.3.0"
+  isbot: "5.2.2"
   oxfmt: "0.74.0"
   oxlint: "1.89.0"
   oxlint-tsgolint: "7.0.2004"
+  react: "19.3.1"
+  react-dom: "19.3.1"
+  react-router: "8.5.0"
   typescript: "7.0.2"
+  vite: "8.3.5"
   vitest: "5.0.5"
+  wrangler: "4.151.0"

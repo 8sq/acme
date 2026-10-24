@@ -36,7 +36,24 @@
     "import/no-anonymous-default-export": "error",
 
     "react/no-multi-comp": ["warn", { "ignoreStateless": true }],
-    "react/only-export-components": "error",
+    "react/only-export-components": [
+      "error",
+      {
+        "allowExportNames": [
+          "action",
+          "clientAction",
+          "clientLoader",
+          "clientMiddleware",
+          "handle",
+          "headers",
+          "links",
+          "loader",
+          "meta",
+          "middleware",
+          "shouldRevalidate"
+        ]
+      }
+    ],
     "react/react-in-jsx-scope": "off",
     "react/jsx-filename-extension": ["error", { "extensions": [".tsx"] }],
     "react/jsx-no-literals": "off",

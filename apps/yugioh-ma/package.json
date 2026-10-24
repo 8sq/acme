@@ -1,0 +1,34 @@
+{
+  "name": "@acme/yugioh-ma",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "build"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "react-router build",
+    "build:workerd": "BUILD_TARGET=workerd react-router build",
+    "dev": "react-router dev",
+    "dev:workerd": "BUILD_TARGET=workerd react-router dev",
+    "start": "react-router-serve build/server/index.js"
+  },
+  "dependencies": {
+    "@acme/app": "workspace:*",
+    "@react-router/serve": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:"
+  },
+  "devDependencies": {
+    "@acme/tsconfig": "workspace:*",
+    "@acme/vite": "workspace:*",
+    "@acme/workerd": "workspace:*",
+    "@react-router/dev": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "vite": "catalog:",
+    "wrangler": "catalog:"
+  }
+}

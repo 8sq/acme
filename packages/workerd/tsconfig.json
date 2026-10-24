@@ -1,0 +1,7 @@
+{
+  "extends": "@acme/tsconfig/tsconfig.workerd.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "vite/client"]
+  },
+  "include": ["src"]
+}

@@ -1,8 +1,5 @@
 {
   "compilerOptions": {
-    "incremental": true,
-    // Nothing is emitted (noEmit), so outDir only relocates .tsbuildinfo
-    "outDir": "${configDir}/node_modules/.tmp",
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",

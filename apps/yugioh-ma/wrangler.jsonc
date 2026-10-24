@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yugioh-ma",
+  "main": "@acme/workerd/worker",
+  "compatibility_date": "2026-10-12",
+  "send_metrics": false
+}

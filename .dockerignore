@@ -1,3 +1,7 @@
 .git
 .pnpm-store
 **/node_modules
+**/build
+**/.react-router
+**/.wrangler
+**/*.tsbuildinfo

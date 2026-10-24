@@ -1,2 +1,6 @@
 node_modules
 .pnpm-store
+build
+.react-router
+*.tsbuildinfo
+.wrangler
