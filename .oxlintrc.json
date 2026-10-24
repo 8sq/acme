@@ -1,0 +1,79 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "node": true,
+    "browser": true
+  },
+  "plugins": ["react", "unicorn", "typescript", "import"],
+  "categories": {
+    "correctness": "error",
+    "nursery": "error",
+    "pedantic": "warn",
+    "suspicious": "error",
+    "perf": "error",
+    "restriction": "error"
+  },
+  "rules": {
+    "eslint/arrow-body-style": "off",
+    "eslint/id-length": ["error", { "exceptions": ["v"] }],
+    "eslint/no-unused-vars": "off",
+    "eslint/no-undef": "off",
+    "eslint/no-console": "off",
+    "eslint/no-undefined": "off",
+    "eslint/no-void": "off",
+    "eslint/no-inline-comments": "off",
+    "eslint/no-warning-comments": "off",
+    "unicorn/no-useless-undefined": [
+      "warn",
+      { "checkArrowFunctionBody": false }
+    ],
+    // Superseded by the type-aware alternatives
+    "eslint/require-await": "off",
+
+    "import/no-default-export": "off",
+    "import/no-relative-parent-imports": "off",
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+    "import/no-anonymous-default-export": "error",
+
+    "react/no-multi-comp": ["warn", { "ignoreStateless": true }],
+    "react/only-export-components": "error",
+    "react/react-in-jsx-scope": "off",
+    "react/jsx-filename-extension": ["error", { "extensions": [".tsx"] }],
+    "react/jsx-no-literals": "off",
+
+    // An ambient module for an id backed by no file can only be reached by a
+    // reference directive.
+    "typescript/triple-slash-reference": "off",
+    "typescript/no-deprecated": "error",
+    "typescript/array-type": "error",
+    "typescript/consistent-type-definitions": "error",
+    "typescript/explicit-function-return-type": "off",
+    "typescript/explicit-module-boundary-types": "off",
+    "typescript/no-unused-vars": "off",
+    "typescript/prefer-readonly-parameter-types": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/strict-boolean-expressions": "off",
+    // A type parameter used only in return position is a cast the caller
+    // names, which is how a registry hands back what its caller asked for.
+    "typescript/no-unnecessary-type-parameters": "off",
+    "typescript/promise-function-async": [
+      "error",
+      { "checkArrowFunctions": false }
+    ]
+  },
+  "options": {
+    "maxWarnings": 0,
+    "typeAware": true
+  },
+  "overrides": [
+    {
+      "files": ["**/*.d.ts"],
+      "rules": {
+        "unicorn/require-module-specifiers": "off",
+        // An ambient `declare module` file must not be a module itself
+        "import/unambiguous": "off"
+      }
+    }
+  ]
+}

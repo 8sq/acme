@@ -4,6 +4,7 @@ packages:
 
 # 2 days in minutes
 minimumReleaseAge: 2880
+savePrefix: ""
 
 tasks:
   build:
@@ -12,10 +13,13 @@ tasks:
   test:
     dependsOn: ["^build"]
     outputs: []
-  lint:
-    dependsOn: ["^build"]
-    outputs: []
 
 pipelines:
-  default: [lint, test, build]
-  check: [lint, test]
+  default: [test, build]
+  check: [test]
+
+catalog:
+  oxfmt: "0.74.0"
+  oxlint: "1.89.0"
+  oxlint-tsgolint: "7.0.2004"
+  typescript: "7.0.2"

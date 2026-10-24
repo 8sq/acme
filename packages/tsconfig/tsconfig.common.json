@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "incremental": true,
+    // Nothing is emitted (noEmit), so outDir only relocates .tsbuildinfo
+    "outDir": "${configDir}/node_modules/.tmp",
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "lib": ["ESNext"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}
