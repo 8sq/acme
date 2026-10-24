@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "build": "pnpm pipeline",
     "check": "pnpm lint && pnpm pipeline check",
     "dev": "pnpm -r --parallel dev",
