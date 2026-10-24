@@ -1,0 +1,4 @@
+.git
+.w
+.pnpm-store
+**/node_modules

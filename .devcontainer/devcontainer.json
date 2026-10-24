@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "acme",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "runArgs": ["--init", "--hostname=${localWorkspaceFolderBasename}"],
+  "remoteUser": "dev",
+  "containerUser": "dev",
+  // Same path as the host so git worktree paths resolve in both
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "oxc.oxc-vscode",
+        "ryanluker.vscode-coverage-gutters",
+        "tamasfe.even-better-toml",
+        "vunguyentuan.vscode-postcss"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "oxc.oxc-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.oxc": "explicit"
+        },
+        "editor.formatOnSave": true,
+        "editor.rulers": [80],
+        "search.useIgnoreFiles": true
+      }
+    }
+  }
+}
