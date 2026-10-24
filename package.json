@@ -4,9 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "build": "pnpm pipeline",
-    "check": "pnpm pipeline check",
-    "dev": "pnpm -r --parallel dev"
+    "check": "pnpm lint && pnpm pipeline check",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "oxfmt --check . && oxlint --no-error-on-unmatched-pattern ."
+  },
+  "devDependencies": {
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "typescript": "catalog:"
   },
   "engines": {
     "node": "^24.0.0"
