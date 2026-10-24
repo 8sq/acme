@@ -1,8 +1,7 @@
+// The router's web-streams default; shipping one stops it editing package.json.
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 import { type EntryContext, ServerRouter } from "react-router";
-
-// The router's web-streams default; shipping one stops it editing package.json.
 
 export const streamTimeout = 5000;
 // React gets 1s past the router's rejection of pending promises to flush them.

@@ -8,6 +8,9 @@
   "runArgs": ["--init", "--hostname=${localWorkspaceFolderBasename}"],
   "remoteUser": "dev",
   "containerUser": "dev",
+  "containerEnv": {
+    "DEVSERVER_HOST": "0.0.0.0"
+  },
   // Same path as the host so git worktree paths resolve in both
   "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
   "workspaceFolder": "${localWorkspaceFolder}",
