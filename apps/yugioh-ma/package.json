@@ -2,6 +2,9 @@
   "name": "@acme/yugioh-ma",
   "version": "0.1.0",
   "private": true,
+  "files": [
+    "build"
+  ],
   "type": "module",
   "scripts": {
     "build": "react-router build",
