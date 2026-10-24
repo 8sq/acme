@@ -1,0 +1,17 @@
+{
+  "name": "@acme/vite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@react-router/dev": "catalog:",
+    "vite": "catalog:"
+  },
+  "devDependencies": {
+    "@acme/tsconfig": "workspace:*",
+    "@types/node": "catalog:"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@acme/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#runtime": {
+      "default": "@acme/node"
+    }
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/entry.server.tsx"
+  },
+  "dependencies": {
+    "@acme/node": "workspace:*",
+    "isbot": "catalog:"
+  },
+  "devDependencies": {
+    "@acme/tsconfig": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:"
+  }
+}
