@@ -1,0 +1,21 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# 2 days in minutes
+minimumReleaseAge: 2880
+
+tasks:
+  build:
+    dependsOn: ["^build"]
+    outputs: ["dist/**"]
+  test:
+    dependsOn: ["^build"]
+    outputs: []
+  lint:
+    dependsOn: ["^build"]
+    outputs: []
+
+pipelines:
+  default: [lint, test, build]
+  check: [lint, test]
