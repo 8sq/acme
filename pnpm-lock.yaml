@@ -239,7 +239,7 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
-  apps/yugioh-ma:
+  apps/ygoma:
     dependencies:
       '@acme/app':
         specifier: workspace:*
