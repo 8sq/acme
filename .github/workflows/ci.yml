@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,13 +31,13 @@ jobs:
 
       # --full: on a push to main nothing differs from origin/main.
       - run: pnpm check --full
-      - run: pnpm --filter @acme/yugioh-ma build
-      - run: pnpm --filter @acme/yugioh-ma build:workerd
+      - run: pnpm --filter @acme/ygoma build
+      - run: pnpm --filter @acme/ygoma build:workerd
 
   docker:
     strategy:
       matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        runner: [ubuntu-26.04, ubuntu-26.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
@@ -45,8 +45,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - run: docker build -f apps/yugioh-ma/Dockerfile -t yugioh-ma .
-      - run: docker run -d --name yugioh-ma -p 3000:3000 yugioh-ma
+      - run: docker build -f apps/ygoma/Dockerfile -t ygoma .
+      - run: docker run -d --name ygoma -p 3000:3000 ygoma
 
       # React's SSR puts `<!-- -->` between "Hello from " and the runtime name.
       - run: |
@@ -56,5 +56,5 @@ jobs:
             fi
             sleep 1
           done
-          docker logs yugioh-ma
+          docker logs ygoma
           exit 1

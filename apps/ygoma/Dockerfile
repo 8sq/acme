@@ -12,8 +12,8 @@ RUN pnpm fetch
 COPY apps apps
 COPY packages packages
 RUN pnpm install --offline --frozen-lockfile
-RUN pnpm --filter @acme/yugioh-ma build
-RUN pnpm --filter @acme/yugioh-ma deploy --prod /deploy
+RUN pnpm --filter @acme/ygoma build
+RUN pnpm --filter @acme/ygoma deploy --prod /deploy
 
 # Same base as the build stage, so native modules keep a matching ABI.
 FROM node:24.22.1-trixie-slim

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "labels": ["dependencies"],
+  "rangeStrategy": "bump",
+  "minimumReleaseAge": "2 days",
+  "platformAutomerge": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Every runner label, matrix included; the built-in manager only reads runs-on",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "\\b(?<depName>ubuntu|macos|windows)-(?<currentValue>\\d+(?:\\.\\d+)?(?:-(?:arm|intel|large|xlarge))?)\\b"
+      ],
+      "datasourceTemplate": "github-runners"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "The runner regex manager owns runs-on too, so it isn't extracted twice",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["github-runner"],
+      "enabled": false
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "A 0.x minor can break, so it waits for the owner",
+      "matchCurrentVersion": "/^0\\./",
+      "matchUpdateTypes": ["minor"],
+      "automerge": false
+    },
+    {
+      "description": "Digests have no release date, so minimumReleaseAge would block them forever",
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Only bump Node majors in 'engines' fields",
+      "matchDepTypes": ["engines"],
+      "matchPackageNames": ["node"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "enabled": false
+    },
+    {
+      "groupName": "Node",
+      "description": "Match on depName so the actions/setup-node GitHub Action's node-version belongs to the Node group",
+      "matchDepNames": ["node", "@types/node"]
+    },
+    {
+      "groupName": "Cloudflare",
+      "description": "wrangler and the vite plugin pin miniflare and workerd, so they must move together",
+      "matchPackageNames": ["wrangler", "@cloudflare/**"]
+    },
+    {
+      "groupName": "React",
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ]
+    },
+    {
+      "groupName": "React Router",
+      "matchPackageNames": ["react-router", "@react-router/**"]
+    },
+    {
+      "groupName": "oxc",
+      "matchPackageNames": ["oxlint", "oxlint-tsgolint", "oxfmt"]
+    }
+  ]
+}
