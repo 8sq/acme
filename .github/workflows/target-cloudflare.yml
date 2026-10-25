@@ -20,7 +20,7 @@ on:
         description: Account workers.dev subdomain, used for the environment URL.
         required: true
         type: string
-    # Environment secrets override these, so callers pass nothing.
+    # Callers pass `secrets: inherit`; the job then reads them from its environment.
     secrets:
       CLOUDFLARE_API_TOKEN:
         required: false

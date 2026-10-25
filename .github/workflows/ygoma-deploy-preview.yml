@@ -15,3 +15,5 @@ jobs:
       environment: preview
       branch: ${{ github.head_ref }}
       workers-subdomain: ygoma-stg
+    # The called job reads ygoma-preview's secrets only when the caller inherits.
+    secrets: inherit
