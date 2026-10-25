@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
+    "@cloudflare/vitest-plugin": "catalog:",
     "@cloudflare/workers-types": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
