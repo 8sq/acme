@@ -7,10 +7,14 @@
     ".": "./src/index.ts",
     "./worker": "./src/worker.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@cloudflare/workers-types": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "react-router": "catalog:"
