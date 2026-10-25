@@ -3,5 +3,6 @@
   "name": "yugioh-ma",
   "main": "@acme/workerd/worker",
   "compatibility_date": "2026-10-12",
+  "assets": { "binding": "ASSETS", "run_worker_first": true },
   "send_metrics": false
 }
