@@ -1,0 +1,17 @@
+name: ygoma-deploy-preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    uses: ./.github/workflows/target-cloudflare.yml
+    with:
+      app: ygoma
+      environment: preview
+      branch: ${{ github.head_ref }}
+      workers-subdomain: ygoma-stg
