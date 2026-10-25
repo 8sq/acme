@@ -5,7 +5,24 @@
   "rangeStrategy": "bump",
   "minimumReleaseAge": "2 days",
   "platformAutomerge": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Every runner label, matrix included; the built-in manager only reads runs-on",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "\\b(?<depName>ubuntu|macos|windows)-(?<currentValue>\\d+(?:\\.\\d+)?(?:-(?:arm|intel|large|xlarge))?)\\b"
+      ],
+      "datasourceTemplate": "github-runners"
+    }
+  ],
   "packageRules": [
+    {
+      "description": "The runner regex manager owns runs-on too, so it isn't extracted twice",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["github-runner"],
+      "enabled": false
+    },
     {
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "automerge": true
