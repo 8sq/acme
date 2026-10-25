@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "yugioh-ma",
+  "name": "ygoma",
   "main": "@acme/workerd/worker",
   "compatibility_date": "2026-10-12",
   "assets": { "binding": "ASSETS", "run_worker_first": true },
