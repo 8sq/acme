@@ -4,3 +4,4 @@ build
 .react-router
 *.tsbuildinfo
 .wrangler
+.env*.local
