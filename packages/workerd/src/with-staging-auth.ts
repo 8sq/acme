@@ -2,12 +2,6 @@ export interface StagingAuthEnv {
   BASIC_AUTH?: string;
 }
 
-const reply = (body: string, status: number, init?: HeadersInit) => {
-  const headers = new Headers(init);
-  headers.set("X-Robots-Tag", "noindex");
-  return new Response(body, { status, headers });
-};
-
 const digest = async (bytes: Uint8Array) => {
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return new Uint8Array(hash);
@@ -19,6 +13,7 @@ const isSameBytes = async (left: Uint8Array, right: Uint8Array) => {
     digest(left),
     digest(right),
   ]);
+
   let diff = 0;
   for (const [index, byte] of leftHash.entries()) {
     diff += Math.abs(byte - (rightHash[index] ?? 0));
@@ -38,20 +33,35 @@ const readCredentials = (request: Request) => {
   }
 };
 
-// No BASIC_AUTH means no gate; a malformed one answers 503.
-export const checkStagingAuth = async (
-  request: Request,
-  env: StagingAuthEnv,
-) => {
-  const secret = env.BASIC_AUTH;
-  if (secret === undefined) return;
-  if (secret.indexOf(":") < 1) return reply("Service unavailable", 503);
+const getRejection = async (request: Request, secret: string) => {
+  if (secret.indexOf(":") < 1) {
+    return new Response("Service unavailable", { status: 503 });
+  }
 
   const credentials = readCredentials(request);
   const expected = new TextEncoder().encode(secret);
   if (await isSameBytes(credentials, expected)) return;
 
-  return reply("Unauthorized", 401, {
-    "WWW-Authenticate": 'Basic realm="Staging", charset="UTF-8"',
+  return new Response("Unauthorized", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="Staging", charset="UTF-8"' },
   });
+};
+
+// No BASIC_AUTH means no gate; a malformed one answers 503.
+export const withStagingAuth = <HandlerEnv extends StagingAuthEnv>(
+  handler: (request: Request, env: HandlerEnv) => Response | Promise<Response>,
+) => {
+  return async (request: Request, env: HandlerEnv) => {
+    const secret = env.BASIC_AUTH;
+    if (secret === undefined) return handler(request, env);
+
+    const rejection = await getRejection(request, secret);
+    const response = rejection ?? (await handler(request, env));
+
+    // Asset responses have immutable headers.
+    const privateResponse = new Response(response.body, response);
+    privateResponse.headers.set("X-Robots-Tag", "noindex");
+    return privateResponse;
+  };
 };
