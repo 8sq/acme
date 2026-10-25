@@ -149,3 +149,10 @@ jobs:
 
           pnpm exec wrangler deploy --name "$WORKER" --secrets-file <(printf '%s' "$secrets")
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
+
+      - name: Probe
+        if: steps.checks.outputs.deploy == 'true'
+        uses: ./.github/actions/probe
+        with:
+          url: ${{ steps.deploy.outputs.url }}/
+          credentials: ${{ inputs.environment != 'production' && secrets.BASIC_AUTH || '' }}

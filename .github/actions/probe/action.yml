@@ -1,0 +1,43 @@
+name: Probe
+description: Wait until a URL serves the app's hello page.
+
+inputs:
+  url:
+    description: URL to fetch, e.g. http://localhost:3000/.
+    required: true
+  credentials:
+    description: Basic auth user:password; empty sends none.
+    required: false
+    default: ""
+  timeout-seconds:
+    description: Ceiling on the wait; a healthy app passes on the first try.
+    required: false
+    default: "60"
+
+runs:
+  using: composite
+  steps:
+    - name: Probe
+      shell: bash
+      env:
+        URL: ${{ inputs.url }}
+        CREDENTIALS: ${{ inputs.credentials }}
+        TIMEOUT: ${{ inputs.timeout-seconds }}
+      run: |
+        auth_args=()
+        if [ -n "$CREDENTIALS" ]; then
+          auth_args=(--user "$CREDENTIALS")
+        fi
+
+        deadline=$((SECONDS + TIMEOUT))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+          body=$(curl -fs --max-time 5 "${auth_args[@]}" "$URL" || true)
+          # React's SSR puts `<!-- -->` between "Hello from " and the runtime name.
+          if grep -qE 'Hello from (<!-- -->)?(node|workerd)' <<< "$body"; then
+            exit 0
+          fi
+          sleep 1
+        done
+
+        echo "::error::$URL did not serve the hello page within ${TIMEOUT}s."
+        exit 1
