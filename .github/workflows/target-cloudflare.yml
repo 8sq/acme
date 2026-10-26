@@ -170,6 +170,22 @@ jobs:
           APP: ${{ inputs.app }}
         run: pnpm --filter "@acme/$APP..." run build:workerd
 
+      # Probed on every run, so forks (no token, no deploy) are probed too.
+      - name: Start local worker
+        working-directory: apps/${{ inputs.app }}
+        run: pnpm exec wrangler dev --ip 127.0.0.1 --port 8787 > "$RUNNER_TEMP/wrangler-dev.log" 2>&1 &
+
+      - name: Probe locally
+        id: local-probe
+        uses: ./.github/actions/probe
+        with:
+          url: http://127.0.0.1:8787/
+          timeout-seconds: 30
+
+      - name: Show local worker logs
+        if: failure() && steps.local-probe.outcome == 'failure'
+        run: cat "$RUNNER_TEMP/wrangler-dev.log"
+
       # A secret, not --var: vars show in the dashboard and deployment logs.
       - name: Deploy
         id: deploy
@@ -195,7 +211,7 @@ jobs:
           pnpm exec wrangler deploy --name "$WORKER" --secrets-file <(printf '%s' "$secrets")
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
-      - name: Probe
+      - name: Probe Cloudflare
         if: needs.checks.outputs.has-token == 'true'
         uses: ./.github/actions/probe
         with:
