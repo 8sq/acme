@@ -2,7 +2,7 @@ name: ygoma-deploy-preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
   contents: read
@@ -15,5 +15,6 @@ jobs:
       environment: preview
       branch: ${{ github.head_ref }}
       workers-subdomain: ygoma-stg
+      ephemeral-labels: dependencies
     # The called job reads ygoma-preview's secrets only when the caller inherits.
     secrets: inherit

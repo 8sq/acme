@@ -11,6 +11,11 @@ on:
         description: preview, staging or production; the GitHub environment is <app>-<environment>.
         required: true
         type: string
+      action:
+        description: deploy or delete; empty picks delete for a closed PR, deploy otherwise.
+        required: false
+        type: string
+        default: ""
       branch:
         description: Head branch, required for preview; the Worker is <app>-<branch slug>.
         required: false
@@ -20,6 +25,11 @@ on:
         description: Account workers.dev subdomain, used for the environment URL.
         required: true
         type: string
+      ephemeral-labels:
+        description: Comma-separated PR labels whose preview is deleted right after its deploy and probe.
+        required: false
+        type: string
+        default: ""
     # Callers pass `secrets: inherit`; the job then reads them from its environment.
     secrets:
       CLOUDFLARE_API_TOKEN:
@@ -33,15 +43,17 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  checks:
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 5
+    # Reads the environment's secrets; no checkout, so no repo code runs beside them.
     environment:
       name: ${{ inputs.app }}-${{ inputs.environment }}
-      url: ${{ steps.deploy.outputs.url }}
-    concurrency:
-      group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
-      cancel-in-progress: true
+      deployment: false
+    outputs:
+      should-deploy: ${{ steps.checks.outputs.should-deploy }}
+      should-delete: ${{ steps.checks.outputs.should-delete }}
+      scoped-slug: ${{ steps.names.outputs.scoped-slug }}
     steps:
       # The worker serves ungated without BASIC_AUTH, so only production may deploy without it.
       - name: Checks
@@ -49,6 +61,9 @@ jobs:
         env:
           DEPLOY_ENV: ${{ inputs.environment }}
           BRANCH: ${{ inputs.branch }}
+          ACTION: ${{ inputs.action || (github.event_name == 'pull_request' && github.event.action == 'closed' && 'delete' || 'deploy') }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          EPHEMERAL_LABELS: ${{ inputs.ephemeral-labels }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
@@ -59,25 +74,51 @@ jobs:
           esac
 
           if [ "$DEPLOY_ENV" = "preview" ] && [ -z "$BRANCH" ]; then
-            echo "::error::A preview deploy needs a branch."
+            echo "::error::A preview needs a branch."
             exit 1
           fi
 
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            # Forks have no secrets; skipping staging or production would fake a deploy.
-            if [ "$DEPLOY_ENV" == "preview" ]; then
-              echo "::notice::No CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID, skipping the deploy."
-              echo "deploy=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "::error::No CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID for $DEPLOY_ENV."
+          case "$ACTION" in
+            deploy)
+              should_deploy=true
+              should_delete=false
+              label=$(jq -rn --argjson labels "$PR_LABELS" --arg wanted "$EPHEMERAL_LABELS" '
+                [$wanted | split(",")[] | gsub("^\\s+|\\s+$"; "") | select(. != "")] as $w
+                | first(($labels // [])[] | select(IN($w[]))) // empty')
+              if [ -n "$label" ]; then
+                echo "::notice::Labelled '$label': ephemeral preview, deleted after the probe."
+                should_delete=true
+              fi
+              ;;
+            delete)
+              should_deploy=false
+              should_delete=true
+              ;;
+            *) echo "::error::Unknown action '$ACTION'." && exit 1 ;;
+          esac
+
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            if [ "$should_deploy" = "true" ] && [ "$DEPLOY_ENV" != "production" ] && [[ "$BASIC_AUTH" != ?*:* ]]; then
+              echo "::error::BASIC_AUTH is missing or not user:password."
               exit 1
             fi
-          elif [ "$DEPLOY_ENV" != "production" ] && [[ "$BASIC_AUTH" != ?*:* ]]; then
-            echo "::error::BASIC_AUTH is missing or not user:password."
-            exit 1
+          # Forks have no secrets; skipping staging or production would fake a deploy.
+          elif [ "$DEPLOY_ENV" = "preview" ]; then
+            echo "::notice::No CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID, skipping Cloudflare."
+            should_deploy=false
+            should_delete=false
           else
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::error::No CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID for $DEPLOY_ENV."
+            exit 1
           fi
+
+          if [ "$should_delete" = "true" ] && [ "$DEPLOY_ENV" != "preview" ]; then
+            echo "::error::Only preview Workers are deleted from CI."
+            exit 1
+          fi
+
+          echo "should-deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+          echo "should-delete=$should_delete" >> "$GITHUB_OUTPUT"
 
       # A branch slugged to "staging" must not take over <app>-staging.
       - name: Resolve names
@@ -98,27 +139,27 @@ jobs:
             production) slug="" ;;
           esac
 
-          echo "slug=$slug" >> "$GITHUB_OUTPUT"
           echo "scoped-slug=$(slugify "$APP-$slug")" >> "$GITHUB_OUTPUT"
 
+  deploy:
+    if: needs.checks.outputs.should-deploy == 'true'
+    needs: checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.app }}-${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
+      cancel-in-progress: true
+    steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # Version comes from packageManager in package.json.
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        with:
-          cache: true
-
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.22.1
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup
+        uses: ./.github/actions/setup
 
       - name: Build
         env:
@@ -128,14 +169,13 @@ jobs:
       # A secret, not --var: vars show in the dashboard and deployment logs.
       - name: Deploy
         id: deploy
-        if: steps.checks.outputs.deploy == 'true'
         working-directory: apps/${{ inputs.app }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
           DEPLOY_ENV: ${{ inputs.environment }}
-          WORKER: ${{ steps.names.outputs.scoped-slug }}
+          WORKER: ${{ needs.checks.outputs.scoped-slug }}
           WORKERS_SUBDOMAIN: ${{ inputs.workers-subdomain }}
         run: |
           secrets='{}'
@@ -151,8 +191,46 @@ jobs:
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Probe
-        if: steps.checks.outputs.deploy == 'true'
         uses: ./.github/actions/probe
         with:
           url: ${{ steps.deploy.outputs.url }}/
           credentials: ${{ inputs.environment != 'production' && secrets.BASIC_AUTH || '' }}
+
+  delete:
+    # After deploy even when it fails, so a labelled preview never lingers.
+    if: ${{ !cancelled() && needs.checks.outputs.should-delete == 'true' }}
+    needs: [checks, deploy]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.app }}-${{ inputs.environment }}
+      deployment: false
+    # Deploy's group, not cancelling: waits for a running deploy instead of racing it.
+    concurrency:
+      group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Delete
+        working-directory: apps/${{ inputs.app }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER: ${{ needs.checks.outputs.scoped-slug }}
+        run: |
+          if ! output=$(pnpm exec wrangler delete "$WORKER" 2>&1); then
+            echo "$output"
+            # Cloudflare's "Worker not found"; wrangler appends the API error code.
+            grep -qF "[code: 10007]" <<< "$output" || exit 1
+            echo "::notice::$WORKER was already gone."
+            exit 0
+          fi
+
+          echo "$output"
