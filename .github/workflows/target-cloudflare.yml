@@ -53,6 +53,7 @@ jobs:
     outputs:
       should-deploy: ${{ steps.checks.outputs.should-deploy }}
       should-delete: ${{ steps.checks.outputs.should-delete }}
+      has-token: ${{ steps.checks.outputs.has-token }}
       scoped-slug: ${{ steps.names.outputs.scoped-slug }}
     steps:
       # The worker serves ungated without BASIC_AUTH, so only production may deploy without it.
@@ -98,14 +99,15 @@ jobs:
           esac
 
           if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            has_token=true
             if [ "$should_deploy" = "true" ] && [ "$DEPLOY_ENV" != "production" ] && [[ "$BASIC_AUTH" != ?*:* ]]; then
               echo "::error::BASIC_AUTH is missing or not user:password."
               exit 1
             fi
-          # Forks have no secrets; skipping staging or production would fake a deploy.
+          # Forks have no secrets: their previews still build, skipping only Cloudflare.
           elif [ "$DEPLOY_ENV" = "preview" ]; then
             echo "::notice::No CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID, skipping Cloudflare."
-            should_deploy=false
+            has_token=false
             should_delete=false
           else
             echo "::error::No CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID for $DEPLOY_ENV."
@@ -119,6 +121,7 @@ jobs:
 
           echo "should-deploy=$should_deploy" >> "$GITHUB_OUTPUT"
           echo "should-delete=$should_delete" >> "$GITHUB_OUTPUT"
+          echo "has-token=$has_token" >> "$GITHUB_OUTPUT"
 
       # A branch slugged to "staging" must not take over <app>-staging.
       - name: Resolve names
@@ -149,6 +152,7 @@ jobs:
     environment:
       name: ${{ inputs.app }}-${{ inputs.environment }}
       url: ${{ steps.deploy.outputs.url }}
+      deployment: ${{ needs.checks.outputs.has-token == 'true' }}
     concurrency:
       group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
       cancel-in-progress: true
@@ -169,6 +173,7 @@ jobs:
       # A secret, not --var: vars show in the dashboard and deployment logs.
       - name: Deploy
         id: deploy
+        if: needs.checks.outputs.has-token == 'true'
         working-directory: apps/${{ inputs.app }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -191,6 +196,7 @@ jobs:
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Probe
+        if: needs.checks.outputs.has-token == 'true'
         uses: ./.github/actions/probe
         with:
           url: ${{ steps.deploy.outputs.url }}/
