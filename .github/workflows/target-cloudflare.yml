@@ -123,7 +123,7 @@ jobs:
       - name: Build
         env:
           APP: ${{ inputs.app }}
-        run: pnpm --filter "@acme/$APP" build:workerd
+        run: pnpm --filter "@acme/$APP..." run build:workerd
 
       # A secret, not --var: vars show in the dashboard and deployment logs.
       - name: Deploy

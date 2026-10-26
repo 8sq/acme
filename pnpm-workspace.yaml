@@ -15,6 +15,9 @@ tasks:
   build:
     dependsOn: ["^build"]
     outputs: ["build/**"]
+  build:workerd:
+    dependsOn: ["^build"]
+    outputs: ["build/**"]
   test:
     dependsOn: ["^build"]
     outputs: []
