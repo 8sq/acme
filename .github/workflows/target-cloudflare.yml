@@ -180,15 +180,11 @@ jobs:
         if: failure() && steps.local-probe.outcome == 'failure'
         run: cat "$RUNNER_TEMP/wrangler-dev.log"
 
-      # .wrangler/deploy/config.json points wrangler deploy at the built config.
       - name: Upload build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.app }}-${{ inputs.environment }}-build
-          path: |
-            apps/${{ inputs.app }}/build
-            apps/${{ inputs.app }}/.wrangler/deploy/config.json
-          include-hidden-files: true
+          path: apps/${{ inputs.app }}/build
           if-no-files-found: error
           overwrite: true
           retention-days: 1
@@ -217,11 +213,12 @@ jobs:
           install-args: --ignore-scripts
           cache: false
 
+      # Outside the checkout: build code wrote it, so it must not overwrite files wrangler loads.
       - name: Download build
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ inputs.app }}-${{ inputs.environment }}-build
-          path: apps/${{ inputs.app }}
+          path: ${{ runner.temp }}/build
 
       # A secret, not --var: vars show in the dashboard and deployment logs.
       - name: Deploy
@@ -234,7 +231,14 @@ jobs:
           DEPLOY_ENV: ${{ inputs.environment }}
           WORKER: ${{ needs.checks.outputs.scoped-slug }}
           WORKERS_SUBDOMAIN: ${{ inputs.workers-subdomain }}
+          CONFIG: ${{ runner.temp }}/build/server/wrangler.json
         run: |
+          # Refuse to run build commands from wrangler config files.
+          if ! jq -e 'has("build") | not' "$CONFIG" > /dev/null; then
+            echo "::error::The built wrangler.json has a build command; refusing to run it."
+            exit 1
+          fi
+
           secrets='{}'
           add_secret() {
             secrets=$(jq --arg name "$1" --arg value "$2" '.[$name] = $value' <<< "$secrets")
@@ -244,7 +248,7 @@ jobs:
             add_secret BASIC_AUTH "$BASIC_AUTH"
           fi
 
-          pnpm exec wrangler deploy --name "$WORKER" --secrets-file <(printf '%s' "$secrets")
+          pnpm exec wrangler deploy --config "$CONFIG" --name "$WORKER" --secrets-file <(printf '%s' "$secrets")
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Probe Cloudflare
