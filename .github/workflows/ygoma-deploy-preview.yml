@@ -16,5 +16,8 @@ jobs:
       branch: ${{ github.head_ref }}
       workers-subdomain: ygoma-stg
       ephemeral-labels: dependencies
-    # The called job reads ygoma-preview's secrets only when the caller inherits.
-    secrets: inherit
+    # Caller-side values are empty; named here so the called jobs read ygoma-preview's.
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BASIC_AUTH: ${{ secrets.BASIC_AUTH }}

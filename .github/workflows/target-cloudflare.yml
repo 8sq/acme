@@ -30,7 +30,7 @@ on:
         required: false
         type: string
         default: ""
-    # Callers pass `secrets: inherit`; the job then reads them from its environment.
+    # Callers name all three; the jobs then read them from their environment.
     secrets:
       CLOUDFLARE_API_TOKEN:
         required: false
