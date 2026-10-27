@@ -25,25 +25,3 @@ jobs:
 
       # --full: on a push to main nothing differs from origin/main.
       - run: pnpm check --full
-
-  docker:
-    strategy:
-      matrix:
-        runner: [ubuntu-26.04, ubuntu-26.04-arm]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - run: docker build -f apps/ygoma/Dockerfile -t ygoma .
-      - run: docker run -d --name ygoma -p 3000:3000 ygoma
-
-      - uses: ./.github/actions/probe
-        with:
-          url: http://localhost:3000/
-          timeout-seconds: 30
-
-      - if: failure()
-        run: docker logs ygoma

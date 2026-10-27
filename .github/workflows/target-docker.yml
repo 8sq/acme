@@ -1,0 +1,48 @@
+name: target-docker
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: Directory under apps/, built from apps/<app>/Dockerfile.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: target-docker-${{ inputs.app }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, ubuntu-26.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      APP: ${{ inputs.app }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: docker build -f "apps/$APP/Dockerfile" -t "$APP" .
+
+      - name: Start container
+        run: docker run -d --name "$APP" -p 3000:3000 "$APP"
+
+      - name: Probe container
+        uses: ./.github/actions/probe
+        with:
+          url: http://localhost:3000/
+          timeout-seconds: 30
+
+      - name: Show container logs
+        if: failure()
+        run: docker logs "$APP"

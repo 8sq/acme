@@ -1,0 +1,15 @@
+name: ygoma-docker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    uses: ./.github/workflows/target-docker.yml
+    with:
+      app: ygoma
