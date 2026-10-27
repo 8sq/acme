@@ -144,18 +144,12 @@ jobs:
 
           echo "scoped-slug=$(slugify "$APP-$slug")" >> "$GITHUB_OUTPUT"
 
-  deploy:
+  # No secrets here: build and dependency code run in this job only.
+  build:
     if: needs.checks.outputs.should-deploy == 'true'
     needs: checks
     runs-on: ubuntu-26.04
     timeout-minutes: 15
-    environment:
-      name: ${{ inputs.app }}-${{ inputs.environment }}
-      url: ${{ steps.deploy.outputs.url }}
-      deployment: ${{ needs.checks.outputs.has-token == 'true' }}
-    concurrency:
-      group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
-      cancel-in-progress: true
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,10 +180,52 @@ jobs:
         if: failure() && steps.local-probe.outcome == 'failure'
         run: cat "$RUNNER_TEMP/wrangler-dev.log"
 
+      # .wrangler/deploy/config.json points wrangler deploy at the built config.
+      - name: Upload build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.app }}-${{ inputs.environment }}-build
+          path: |
+            apps/${{ inputs.app }}/build
+            apps/${{ inputs.app }}/.wrangler/deploy/config.json
+          include-hidden-files: true
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  deploy:
+    if: needs.checks.outputs.has-token == 'true'
+    needs: [checks, build]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment:
+      name: ${{ inputs.app }}-${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # No dependency code runs beside the secrets; a build job's cache could be tampered with.
+      - name: Setup
+        uses: ./.github/actions/setup
+        with:
+          install-args: --ignore-scripts
+          cache: false
+
+      - name: Download build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.app }}-${{ inputs.environment }}-build
+          path: apps/${{ inputs.app }}
+
       # A secret, not --var: vars show in the dashboard and deployment logs.
       - name: Deploy
         id: deploy
-        if: needs.checks.outputs.has-token == 'true'
         working-directory: apps/${{ inputs.app }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -212,7 +248,6 @@ jobs:
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Probe Cloudflare
-        if: needs.checks.outputs.has-token == 'true'
         uses: ./.github/actions/probe
         with:
           url: ${{ steps.deploy.outputs.url }}/
@@ -237,8 +272,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
         uses: ./.github/actions/setup
+        with:
+          install-args: --ignore-scripts
+          cache: false
 
       - name: Delete
         working-directory: apps/${{ inputs.app }}
