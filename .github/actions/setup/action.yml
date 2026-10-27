@@ -1,0 +1,33 @@
+name: Setup
+description: Set up pnpm and Node, then install dependencies. Check out first.
+
+inputs:
+  install-args:
+    description: Extra arguments for pnpm install, split on spaces.
+    required: false
+    default: ""
+  cache:
+    description: Restore and save the pnpm store.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    # Version comes from packageManager in package.json.
+    - name: Set up pnpm
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      with:
+        cache: ${{ inputs.cache }}
+
+    - name: Set up Node
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 24.22.1
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        INSTALL_ARGS: ${{ inputs.install-args }}
+      # Unquoted on purpose, to split the arguments.
+      run: pnpm install --frozen-lockfile $INSTALL_ARGS

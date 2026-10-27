@@ -21,18 +21,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.22.1
-
-      # Same as the Dockerfile: pnpm switches itself to `packageManager`.
-      - run: npm install -g pnpm
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       # --full: on a push to main nothing differs from origin/main.
       - run: pnpm check --full
-      - run: pnpm --filter @acme/ygoma build
-      - run: pnpm --filter @acme/ygoma build:workerd
 
   docker:
     strategy:
@@ -48,13 +40,10 @@ jobs:
       - run: docker build -f apps/ygoma/Dockerfile -t ygoma .
       - run: docker run -d --name ygoma -p 3000:3000 ygoma
 
-      # React's SSR puts `<!-- -->` between "Hello from " and the runtime name.
-      - run: |
-          for _ in $(seq 30); do
-            if curl -fs --max-time 1 http://localhost:3000/ | grep -qE 'Hello from (<!-- -->)?node'; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs ygoma
-          exit 1
+      - uses: ./.github/actions/probe
+        with:
+          url: http://localhost:3000/
+          timeout-seconds: 30
+
+      - if: failure()
+        run: docker logs ygoma

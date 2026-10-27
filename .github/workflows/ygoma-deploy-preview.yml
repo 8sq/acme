@@ -1,0 +1,23 @@
+name: ygoma-deploy-preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    uses: ./.github/workflows/target-cloudflare.yml
+    with:
+      app: ygoma
+      environment: preview
+      branch: ${{ github.head_ref }}
+      workers-subdomain: ygoma-stg
+      ephemeral-labels: dependencies
+    # Caller-side values are empty; named here so the called jobs read ygoma-preview's.
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
