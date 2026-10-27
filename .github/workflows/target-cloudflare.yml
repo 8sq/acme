@@ -233,9 +233,9 @@ jobs:
           WORKERS_SUBDOMAIN: ${{ inputs.workers-subdomain }}
           CONFIG: ${{ runner.temp }}/build/server/wrangler.json
         run: |
-          # Refuse to run build commands from wrangler config files.
-          if ! jq -e 'has("build") | not' "$CONFIG" > /dev/null; then
-            echo "::error::The built wrangler.json has a build command; refusing to run it."
+          # Refuse to run build commands or container builds from wrangler config files.
+          if ! jq -e 'has("build") or has("containers") | not' "$CONFIG" > /dev/null; then
+            echo "::error::The built wrangler.json has a build command or containers; refusing to deploy it."
             exit 1
           fi
 
