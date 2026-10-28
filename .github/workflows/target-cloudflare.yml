@@ -159,7 +159,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
 
       - name: Build
         env:
@@ -173,7 +173,7 @@ jobs:
 
       - name: Probe locally
         id: local-probe
-        uses: ./.github/actions/probe
+        uses: $/.github/actions/probe
         with:
           url: http://127.0.0.1:8787/
           timeout-seconds: 30
@@ -210,7 +210,7 @@ jobs:
 
       # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
         with:
           install-args: --ignore-scripts
           cache: false
@@ -254,7 +254,7 @@ jobs:
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Probe Cloudflare
-        uses: ./.github/actions/probe
+        uses: $/.github/actions/probe
         with:
           url: ${{ steps.deploy.outputs.url }}/
           credentials: ${{ inputs.environment != 'production' && secrets.BASIC_AUTH || '' }}
@@ -280,7 +280,7 @@ jobs:
 
       # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
         with:
           install-args: --ignore-scripts
           cache: false

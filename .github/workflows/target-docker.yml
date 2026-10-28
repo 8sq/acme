@@ -38,7 +38,7 @@ jobs:
         run: docker run -d --name "$APP" -p 3000:3000 "$APP"
 
       - name: Probe container
-        uses: ./.github/actions/probe
+        uses: $/.github/actions/probe
         with:
           url: http://localhost:3000/
           timeout-seconds: 30
