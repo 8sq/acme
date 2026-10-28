@@ -4,10 +4,34 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./db": "./src/db.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "kysely": "catalog:"
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
-    "@types/node": "catalog:"
+    "@types/better-sqlite3": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "better-sqlite3": "catalog:",
+    "pg": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "catalog:",
+    "pg": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
   }
 }

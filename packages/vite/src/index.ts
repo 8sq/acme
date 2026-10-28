@@ -15,7 +15,11 @@ export default defineConfig(() => {
   return {
     plugins: [cloudflarePlugins, reactRouter()],
     server: { host: devServerHost === "" ? undefined : devServerHost },
-    // Bundled so apps need not depend on what @acme/server imports.
-    ssr: { noExternal: ["isbot"] },
+    ssr: {
+      // Node only (the Cloudflare plugin refuses it): better-sqlite3 breaks when bundled.
+      external: isWorkerd ? [] : ["better-sqlite3", "pg"],
+      // Bundled so apps need not depend on what @acme/server imports.
+      noExternal: ["isbot"],
+    },
   };
 });
