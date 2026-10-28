@@ -23,5 +23,4 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # --full: on a push to main nothing differs from origin/main.
-      - run: pnpm check --full
+      - run: pnpm check
