@@ -2,7 +2,7 @@ name: ygoma-staging
 
 on:
   push:
-    branches: [main, staging-deploy]
+    branches: [main]
 
 permissions:
   contents: read
