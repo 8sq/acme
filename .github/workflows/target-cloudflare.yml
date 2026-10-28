@@ -153,11 +153,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       - name: Setup
         uses: $/.github/actions/setup
 
@@ -203,11 +198,6 @@ jobs:
       group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
       cancel-in-progress: true
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
         uses: $/.github/actions/setup
@@ -273,11 +263,6 @@ jobs:
       group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
       cancel-in-progress: false
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
         uses: $/.github/actions/setup
