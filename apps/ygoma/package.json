@@ -14,8 +14,8 @@
     "start": "react-router-serve build/server/index.js"
   },
   "dependencies": {
-    "@acme/app": "workspace:*",
     "@acme/router": "workspace:*",
+    "@acme/server": "workspace:*",
     "@react-router/serve": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

@@ -15,7 +15,7 @@ export default defineConfig(() => {
   return {
     plugins: [cloudflarePlugins, reactRouter()],
     server: { host: devServerHost === "" ? undefined : devServerHost },
-    // Bundled so apps need not depend on what @acme/app/server imports.
+    // Bundled so apps need not depend on what @acme/server imports.
     ssr: { noExternal: ["isbot"] },
   };
 });

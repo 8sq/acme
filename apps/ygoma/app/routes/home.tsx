@@ -1,4 +1,4 @@
-import { runtime } from "@acme/app";
+import { runtime } from "@acme/server";
 import { useLoaderData } from "react-router";
 
 export const loader = () => {

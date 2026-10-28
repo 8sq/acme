@@ -1,4 +1,0 @@
-{
-  "extends": "@acme/tsconfig/tsconfig.react.json",
-  "include": ["src"]
-}
