@@ -8,10 +8,12 @@ const importHealthChecks = () => {
 describe("runHealthChecks", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("passes with no checks", async () => {
@@ -28,6 +30,18 @@ describe("runHealthChecks", () => {
       status: "fail",
       checks: { cache: "pass", queue: "fail" },
     });
+  });
+
+  it("logs why a check failed", async () => {
+    const { addHealthCheck, runHealthChecks } = await importHealthChecks();
+    const error = new Error("secret host");
+    addHealthCheck("queue", () => Promise.reject(error));
+    await runHealthChecks();
+
+    expect(console.error).toHaveBeenCalledWith(
+      'health check "queue" failed:',
+      error,
+    );
   });
 
   it("fails a check that throws synchronously", async () => {
