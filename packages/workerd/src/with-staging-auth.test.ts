@@ -3,9 +3,9 @@ import { withStagingAuth } from "./with-staging-auth.ts";
 
 const env = { BASIC_AUTH: "admin:s3:cret" };
 
-const createRequest = (authorization?: string) => {
+const createRequest = (authorization?: string, path = "/") => {
   const headers = authorization ? { Authorization: authorization } : undefined;
-  return new Request("https://staging.example/", { headers });
+  return new Request(`https://staging.example${path}`, { headers });
 };
 
 const encodeBasic = (credentials: string, prefix = "Basic") => {
@@ -73,6 +73,21 @@ describe("withStagingAuth", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
   });
+
+  it("leaves /_health open", async () => {
+    const request = createRequest(undefined, "/_health");
+    const response = await fetchApp(request, env);
+    expect(await response.text()).toBe("app");
+  });
+
+  it.each(["/_health/x", "/_healthz", "/x/_health"])(
+    "gates %s",
+    async (path) => {
+      const request = createRequest(undefined, path);
+      const response = await fetchApp(request, env);
+      expect(response.status).toBe(401);
+    },
+  );
 
   it("is open and indexable when no secret is set", async () => {
     const response = await fetchApp(createRequest(), {});

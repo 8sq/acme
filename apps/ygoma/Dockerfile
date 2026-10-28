@@ -10,6 +10,9 @@ RUN pnpm fetch
 COPY apps apps
 COPY packages packages
 RUN pnpm install --offline --frozen-lockfile
+
+# Declared late so a new commit does not rebuild the install layers.
+ARG APP_REVISION
 RUN pnpm --filter @acme/ygoma build
 RUN pnpm --filter @acme/ygoma deploy --prod /deploy
 

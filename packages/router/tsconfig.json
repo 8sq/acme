@@ -1,7 +1,4 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.react.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+  "extends": "@acme/tsconfig/tsconfig.node.json",
+  "include": ["src"]
 }
