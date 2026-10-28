@@ -1,4 +1,4 @@
-name: workflow-lint
+name: ci:workflows
 
 on:
   pull_request:
@@ -11,11 +11,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: workflow-lint-${{ github.ref }}
+  group: ci-workflows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
+  workflows:
+    name: lint workflows
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:

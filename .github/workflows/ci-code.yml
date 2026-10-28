@@ -1,4 +1,4 @@
-name: ci
+name: ci:code
 
 on:
   pull_request:
@@ -9,11 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-code-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
+  code:
+    name: lint and test
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
