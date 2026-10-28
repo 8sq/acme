@@ -38,7 +38,7 @@ export const getDb = (_name: "default" = "default") => {
 /**
  * Runs compiled queries atomically, in order: all succeed or none do.
  *
- * Postgres retries the whole batch on a serialization failure, up to 3 attempts.
+ * Postgres retries the whole batch on a serialization failure, up to 10 attempts.
  */
 export const batch = async <Queries extends readonly CompiledQuery[]>(
   db: Kysely<Schema<"default">>,

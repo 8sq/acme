@@ -12,7 +12,16 @@ import {
 let instance: Kysely<unknown> | undefined;
 
 // Postgres serialization failures; a batch is fixed SQL, so retrying is safe.
-const batchAttempts = 3;
+const batchAttempts = 10;
+// Random waits spread retries out; without them, they collide again at once.
+const maxBackoffMs = 200;
+
+const waitBeforeRetry = (attempt: number) => {
+  const ceiling = Math.min(maxBackoffMs, 5 * 2 ** attempt);
+  return new Promise((resolve) => {
+    setTimeout(resolve, Math.random() * ceiling);
+  });
+};
 
 const importDriver = async <Driver>(
   load: () => Promise<{ default: Driver }>,
@@ -95,6 +104,7 @@ const batchPostgres = async <Schema>(
       .execute((trx) => executeInOrder(trx, queries));
   } catch (error) {
     if (attempt < batchAttempts && isSerializationFailure(error)) {
+      await waitBeforeRetry(attempt);
       return batchPostgres(db, queries, attempt + 1);
     }
     throw error;
