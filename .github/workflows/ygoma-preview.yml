@@ -1,4 +1,4 @@
-name: ygoma-deploy-preview
+name: ygoma-preview
 
 on:
   pull_request:
