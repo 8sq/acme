@@ -1,0 +1,1 @@
+Temporary: checks that workflow-lint skips PRs without .github changes.
