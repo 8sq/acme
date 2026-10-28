@@ -5,10 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./db": "./src/db.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {
     "test": "vitest run"
+  },
+  "dependencies": {
+    "kysely": "catalog:",
+    "kysely-cloudflare": "catalog:"
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",

@@ -17,9 +17,36 @@ jobs:
     name: lint and test
     runs-on: ubuntu-26.04
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        # Data in RAM: the job throws the server away.
+        options: >-
+          --tmpfs /var/lib/postgresql
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - name: Setup
         uses: $/.github/actions/setup
 
+      # Services take no command line, so the running server is tuned instead.
+      - name: Tune Postgres for tests
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: >-
+          docker exec "$POSTGRES_CONTAINER" psql -U postgres -v ON_ERROR_STOP=1
+          -c "alter system set fsync = off"
+          -c "alter system set synchronous_commit = off"
+          -c "alter system set full_page_writes = off"
+          -c "select pg_reload_conf()"
+
       - name: Check
+        env:
+          ACME_TEST_POSTGRES_URL: postgres://postgres@localhost:5432/postgres
         run: pnpm check

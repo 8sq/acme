@@ -49,7 +49,12 @@ export default defineConfig(() => {
   return {
     plugins: [createIdentityPlugin(), cloudflarePlugins, reactRouter()],
     server: { host: devServerHost === "" ? undefined : devServerHost },
-    // Bundled so apps need not depend on what @acme/server imports.
-    ssr: { noExternal: ["isbot"] },
+    ssr: {
+      // Bundling breaks better-sqlite3. Node only: the Cloudflare plugin
+      // refuses `external`.
+      external: isWorkerd ? [] : ["better-sqlite3", "pg"],
+      // Bundled so apps need not depend on what @acme/server imports.
+      noExternal: ["isbot"],
+    },
   };
 });
