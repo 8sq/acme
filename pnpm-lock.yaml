@@ -244,6 +244,9 @@ importers:
 
   apps/ygoma:
     dependencies:
+      '@acme/router':
+        specifier: workspace:*
+        version: link:../../packages/router
       '@acme/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -296,6 +299,34 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
+
+  packages/router:
+    dependencies:
+      react:
+        specifier: 'catalog:'
+        version: 19.3.1
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.1(react@19.3.1)
+      react-router:
+        specifier: 'catalog:'
+        version: 8.5.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+    devDependencies:
+      '@acme/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@react-router/dev':
+        specifier: 'catalog:'
+        version: 8.5.0(@react-router/serve@8.5.0(react-router@8.5.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(supports-color@10.2.2)(typescript@7.0.2))(react-router@8.5.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2))(wrangler@4.152.0(@cloudflare/workers-types@5.20261026.1)(@types/node@24.19.2))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.2
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
 
   packages/server:
     dependencies:
