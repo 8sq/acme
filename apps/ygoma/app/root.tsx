@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Links, Meta, Scripts, ScrollRestoration } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
@@ -17,4 +17,8 @@ export function Layout({ children }: { children: ReactNode }) {
       </body>
     </html>
   );
+}
+
+export default function App() {
+  return <Outlet />;
 }
