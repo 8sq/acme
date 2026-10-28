@@ -23,7 +23,10 @@ declare module "vitest" {
 
 declare module "./index.server.ts" {
   interface Databases {
-    default: { cat: { id: number; name: string } };
+    default: {
+      cat: { id: number; name: string };
+      seat: { id: number };
+    };
   }
 }
 
@@ -151,6 +154,30 @@ describe.runIf(isD1)("getDb on D1", () => {
   });
 });
 
+const resetSeatTable = async () => {
+  const db = getDb();
+  await db.schema.dropTable("seat").ifExists().execute();
+  await db.schema
+    .createTable("seat")
+    .addColumn("id", "integer", (column) => column.primaryKey())
+    .execute();
+};
+
+const getSeats = () => {
+  return getDb().selectFrom("seat").select("id").execute();
+};
+
+const buildSignUp = (id: number) => {
+  const db = getDb();
+  const takenSeats = db
+    .selectFrom("seat")
+    .select((builder) => builder.fn.countAll().as("taken"));
+  const seat = db
+    .selectNoFrom((builder) => builder.val(id).as("id"))
+    .where(takenSeats, "<", 32);
+  return db.insertInto("seat").columns(["id"]).expression(seat).compile();
+};
+
 describe("batch", () => {
   beforeEach(resetCatTable);
 
@@ -208,6 +235,18 @@ describe("batch", () => {
 
     const cats = await db.selectFrom("cat").selectAll().execute();
     expect(cats).toEqual([]);
+  });
+
+  it("fills 32 seats exactly from 40 concurrent sign-ups", async () => {
+    await resetSeatTable();
+    const db = getDb();
+    const signUps = Array.from({ length: 40 }, (_entry, id) => {
+      const signUp = buildSignUp(id);
+      return batch(db, [signUp]);
+    });
+    await Promise.all(signUps);
+
+    expect(await getSeats()).toHaveLength(32);
   });
 });
 

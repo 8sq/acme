@@ -42,8 +42,8 @@ export const getDb = (_name: "default" = "default") => {
  *
  * Postgres retries the whole batch on serialization failures, up to 10 times.
  */
-export const batch = async <Queries extends readonly CompiledQuery[]>(
-  db: Kysely<Schema<"default">>,
+export const batch = async <Tables, Queries extends readonly CompiledQuery[]>(
+  db: Kysely<Tables>,
   queries: readonly [...Queries],
 ) => {
   const results = await runBatch(db, queries);
@@ -61,8 +61,8 @@ const isSelect = (node: OperationNode): boolean => {
 /**
  * Runs compiled SELECT queries, with no atomicity or shared snapshot.
  */
-export const readAll = async <Queries extends readonly CompiledQuery[]>(
-  db: Kysely<Schema<"default">>,
+export const readAll = async <Tables, Queries extends readonly CompiledQuery[]>(
+  db: Kysely<Tables>,
   queries: readonly [...Queries],
 ) => {
   if (!queries.every((query) => isSelect(query.query))) {
