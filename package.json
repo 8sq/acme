@@ -5,16 +5,18 @@
   "type": "module",
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
-    "build": "pnpm pipeline",
-    "check": "pnpm lint && pnpm pipeline check",
-    "dev": "pnpm -r --parallel dev",
-    "lint": "oxfmt --check . && oxlint --no-error-on-unmatched-pattern ."
+    "check": "pnpm lint && pnpm test",
+    "lint": "oxfmt --check . && oxlint --no-error-on-unmatched-pattern .",
+    "test": "vitest run",
+    "ygoma:dev": "pnpm --filter @acme/ygoma dev",
+    "ygoma:dev:workerd": "pnpm --filter @acme/ygoma dev:workerd"
   },
   "devDependencies": {
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": "^24.0.0"

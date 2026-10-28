@@ -11,21 +11,6 @@ allowBuilds:
 
 savePrefix: ""
 
-tasks:
-  build:
-    dependsOn: ["^build"]
-    outputs: ["build/**"]
-  build:workerd:
-    dependsOn: ["^build"]
-    outputs: ["build/**"]
-  test:
-    dependsOn: ["^build"]
-    outputs: []
-
-pipelines:
-  default: [test, build]
-  check: [test]
-
 catalog:
   "@cloudflare/vite-plugin": "1.65.0"
   "@cloudflare/vitest-plugin": "1.4.7"
