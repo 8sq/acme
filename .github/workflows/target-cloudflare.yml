@@ -119,9 +119,11 @@ jobs:
             exit 1
           fi
 
-          echo "should-deploy=$should_deploy" >> "$GITHUB_OUTPUT"
-          echo "should-delete=$should_delete" >> "$GITHUB_OUTPUT"
-          echo "has-token=$has_token" >> "$GITHUB_OUTPUT"
+          {
+            echo "should-deploy=$should_deploy"
+            echo "should-delete=$should_delete"
+            echo "has-token=$has_token"
+          } >> "$GITHUB_OUTPUT"
 
       # A branch slugged to "staging" must not take over <app>-staging.
       - name: Resolve names
