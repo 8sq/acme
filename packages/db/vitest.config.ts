@@ -17,8 +17,8 @@ const postgres: TestProjectInlineConfiguration[] = postgresUrl
         test: {
           name: "node:postgres",
           include,
-          globalSetup: ["src/postgres-cleanup.ts"],
-          setupFiles: ["src/postgres-database.ts"],
+          globalSetup: ["testing/postgres-cleanup.ts"],
+          setupFiles: ["testing/postgres-database.ts"],
           provide: { database: "postgres" },
         },
       },
