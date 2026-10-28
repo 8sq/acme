@@ -12,4 +12,4 @@ await client.end();
 
 const url = new URL(serverUrl ?? "");
 url.pathname = `/${name}`;
-process.env.DATABASE_URL = url.href;
+process.env.DEFAULT_DATABASE_URL = url.href;

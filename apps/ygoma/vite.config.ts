@@ -1,1 +1,6 @@
-export { default } from "@acme/vite";
+import acme from "@acme/vite";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [acme()],
+});

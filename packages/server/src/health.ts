@@ -23,13 +23,15 @@ export const addHealthCheck = (name: string, check: HealthCheck) => {
 const runCheck = async (name: string, check: HealthCheck) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise((_resolve, reject) => {
-    timer = setTimeout(reject, checkTimeoutMs);
+    const error = new Error(`timed out after ${checkTimeoutMs}ms`);
+    timer = setTimeout(reject, checkTimeoutMs, error);
   });
 
   try {
     await Promise.race([check(), timeout]);
     return [name, "pass"] as const;
-  } catch {
+  } catch (error) {
+    console.error(`health check "${name}" failed:`, error);
     return [name, "fail"] as const;
   } finally {
     clearTimeout(timer);

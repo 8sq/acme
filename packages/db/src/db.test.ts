@@ -79,8 +79,19 @@ describe("getDb", () => {
     expect(status).toBe("pass");
   });
 
-  it("takes only the default name so far", () => {
-    expectTypeOf(getDb).parameter(0).toEqualTypeOf<"default" | undefined>();
+  it("takes a name from the Databases map, defaulting to default", () => {
+    expectTypeOf(getDb).toBeCallableWith();
+    expectTypeOf(getDb).toBeCallableWith("default");
+    expectTypeOf(getDb()).toEqualTypeOf(getDb("default"));
+  });
+
+  it("throws on a name @acme/vite didn't list", () => {
+    const getAudit = () => {
+      return getDb("audit" as "default");
+    };
+    expect(getAudit).toThrow(
+      'database "audit" is not in @acme/vite\'s databases',
+    );
   });
 });
 
@@ -99,17 +110,17 @@ describe.runIf(!isD1)("getDb on SQLite and Postgres", () => {
   });
 
   it("keeps one instance per process", () => {
-    expect(getDb("default")).toBe(getDb());
+    expect(getDb()).toBe(getDb("default"));
   });
 });
 
 const importFreshGetDb = async (url?: string) => {
-  vi.stubEnv("DATABASE_URL", url);
+  vi.stubEnv("DEFAULT_DATABASE_URL", url);
   const { getDb: getFreshDb } = await import("#runtime");
-  return getFreshDb;
+  return () => getFreshDb("default");
 };
 
-describe.runIf(!isD1)("DATABASE_URL on SQLite and Postgres", () => {
+describe.runIf(!isD1)("DEFAULT_DATABASE_URL on SQLite and Postgres", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -118,20 +129,22 @@ describe.runIf(!isD1)("DATABASE_URL on SQLite and Postgres", () => {
     vi.unstubAllEnvs();
   });
 
-  it("fails when DATABASE_URL is missing", async () => {
+  it("fails when DEFAULT_DATABASE_URL is missing", async () => {
     const getFreshDb = await importFreshGetDb();
-    expect(getFreshDb).toThrow("DATABASE_URL is not set");
+    expect(getFreshDb).toThrow("DEFAULT_DATABASE_URL is not set");
   });
 
   it("names an unknown scheme without echoing the URL", async () => {
     const getFreshDb = await importFreshGetDb("mysql://admin:hunter2@host/app");
-    expect(getFreshDb).toThrow('DATABASE_URL: unsupported scheme "mysql:"');
+    expect(getFreshDb).toThrow(
+      'DEFAULT_DATABASE_URL: unsupported scheme "mysql:"',
+    );
   });
 
   it("refuses a scheme named after an Object.prototype key", async () => {
     const getFreshDb = await importFreshGetDb("constructor:x");
     expect(getFreshDb).toThrow(
-      'DATABASE_URL: unsupported scheme "constructor:"',
+      'DEFAULT_DATABASE_URL: unsupported scheme "constructor:"',
     );
   });
 });

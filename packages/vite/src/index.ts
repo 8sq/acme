@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { reactRouter } from "@react-router/dev/vite";
-import { defineConfig, type Plugin } from "vite";
+import type { Plugin, PluginOption } from "vite";
 
 const isWorkerd = process.env.BUILD_TARGET === "workerd";
 // Unset or empty means localhost; a container sets 0.0.0.0 to be reachable.
@@ -34,20 +34,37 @@ const createIdentityPlugin = (): Plugin => ({
 
     const define: Record<string, string> = {};
     for (const [key, value] of Object.entries(identity)) {
-      define[`__APP_${key}__`] = JSON.stringify(value);
+      define[`__ACME_${key}__`] = JSON.stringify(value);
     }
     return { define };
   },
 });
 
-// React Router resolves this again; a shared plugin would keep stale outDirs.
-export default defineConfig(() => {
-  const cloudflarePlugins = isWorkerd
-    ? cloudflare({ viteEnvironment: { name: "ssr" } })
-    : [];
+// Uppercased into `<NAME>_DB` and `<NAME>_DATABASE_URL`.
+const databaseNamePattern = /^[a-z][a-z0-9_]*$/u;
 
-  return {
-    plugins: [createIdentityPlugin(), cloudflarePlugins, reactRouter()],
+const checkDatabaseNames = (names: readonly string[]) => {
+  const invalidNames = names.filter((name) => !databaseNamePattern.test(name));
+  if (invalidNames.length > 0) {
+    const list = invalidNames.map((name) => `"${name}"`).join(", ");
+    const rule = "lower case letters, digits, _, and start with a letter";
+    const message = `database names should be ${rule}: ${list}`;
+    throw new Error(message);
+  }
+
+  if (new Set(names).size !== names.length) {
+    throw new Error("database names must be unique");
+  }
+};
+
+const createDatabasesPlugin = (names: readonly string[]): Plugin => {
+  const define = { __ACME_DATABASES__: JSON.stringify(names) };
+  return { name: "acme:databases", config: () => ({ define }) };
+};
+
+const createSsrPlugin = (): Plugin => ({
+  name: "acme:ssr",
+  config: () => ({
     server: { host: devServerHost === "" ? undefined : devServerHost },
     ssr: {
       // Bundling breaks better-sqlite3. Node only: the Cloudflare plugin
@@ -56,5 +73,32 @@ export default defineConfig(() => {
       // Bundled so apps need not depend on what @acme/server imports.
       noExternal: ["isbot"],
     },
-  };
+  }),
 });
+
+export interface Options {
+  /**
+   * Names for `getDb()` from `@acme/db`; none leaves it unused.
+   */
+  databases?: readonly string[];
+}
+
+/**
+ * React Router, Cloudflare on workerd builds, and the `__ACME_*__` globals.
+ */
+const acme = ({ databases = [] }: Options = {}): PluginOption[] => {
+  checkDatabaseNames(databases);
+
+  const cloudflarePlugins = isWorkerd
+    ? cloudflare({ viteEnvironment: { name: "ssr" } })
+    : [];
+  return [
+    createIdentityPlugin(),
+    createDatabasesPlugin(databases),
+    createSsrPlugin(),
+    cloudflarePlugins,
+    reactRouter(),
+  ];
+};
+
+export default acme;

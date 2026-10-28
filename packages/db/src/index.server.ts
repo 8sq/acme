@@ -19,7 +19,17 @@ import { addHealthCheck } from "@acme/server";
 // oxlint-disable-next-line no-empty-object-type
 export interface Databases {}
 
-type Schema<Name> = Name extends keyof Databases ? Databases[Name] : never;
+type DatabaseName = Extract<keyof Databases, string>;
+type DefaultDb = Databases extends { default: infer Schema }
+  ? Kysely<Schema>
+  : never;
+// Without a `default` database, `getDb()` reports "Expected 1 arguments".
+type NoName = Databases extends { default: unknown } ? [] : [name: never];
+
+interface GetDb {
+  (...args: NoName): DefaultDb;
+  <Name extends DatabaseName>(name: Name): Kysely<Databases[Name]>;
+}
 
 /**
  * One `QueryResult` per query passed to `batch()` or `readAll()`, in order.
@@ -31,18 +41,34 @@ export type BatchResults<Queries extends readonly CompiledQuery[]> = {
 };
 
 /**
- * The app's database: D1 on workerd, `DATABASE_URL` on Node.
+ * The D1 binding `<NAME>_DB` on workerd, `<NAME>_DATABASE_URL` on Node.
  *
- * Only `"default"` exists so far.
+ * Throws on a name missing from `@acme/vite`'s `databases`.
+ *
+ * @param name Defaults to `"default"`.
  */
-export const getDb = (_name: "default" = "default") => {
-  return getRuntimeDb() as Kysely<Schema<"default">>;
+export const getDb: GetDb = (name = "default") => {
+  if (!__ACME_DATABASES__.includes(name)) {
+    const message = `database "${name}" is not in @acme/vite's databases`;
+    throw new Error(message);
+  }
+
+  return getRuntimeDb(name);
+};
+
+const pingDb = async (name: string) => {
+  try {
+    await sql`select 1`.execute(getRuntimeDb(name));
+  } catch (error) {
+    const message = `database "${name}" is down`;
+    throw new Error(message, { cause: error });
+  }
 };
 
 // Runs on import, so `/_health?full` reports it in any app using the database.
 // Keep `"sideEffects": false` out of package.json, or bundlers drop this.
 addHealthCheck("database", async () => {
-  await sql`select 1`.execute(getDb());
+  await Promise.all(__ACME_DATABASES__.map((name) => pingDb(name)));
 });
 
 /**
