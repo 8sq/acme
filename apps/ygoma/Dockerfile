@@ -1,8 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM node:24.22.1-trixie AS build
-
-# pnpm switches itself to the version pinned in package.json
-RUN npm install -g pnpm
+FROM node:24.22.1-trixie-slim AS build
+RUN npm install -g pnpm@12.15.0
 WORKDIR /repo
 
 # The lockfile alone keys the download layer, so editing sources skips it.
