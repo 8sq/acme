@@ -45,7 +45,7 @@ jobs:
         uses: $/.github/actions/probe
         with:
           url: http://localhost:3000
-          sha: 0000000000000000000000000000000000000000
+          sha: ${{ env.HEAD_SHA }}
           timeout-seconds: 30
 
       - name: Show container logs
