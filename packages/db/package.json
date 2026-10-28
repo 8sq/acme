@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@acme/node": "workspace:*",
+    "@acme/server": "workspace:*",
     "kysely": "catalog:"
   },
   "devDependencies": {

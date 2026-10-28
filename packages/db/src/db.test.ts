@@ -10,6 +10,7 @@ import {
   vi,
 } from "vitest";
 import { getDbKind } from "#runtime";
+import { runHealthChecks } from "@acme/server";
 import { batch, getDb, readAll } from "./index.server.ts";
 import { type Migrations, migrate } from "./migrate.server.ts";
 
@@ -69,6 +70,13 @@ describe("getDb", () => {
     expect(inserted).toEqual({ name: "Cattie" });
     expect(cats).toEqual([{ id: 1, name: "Jane" }]);
     expect(left).toEqual([]);
+  });
+
+  it("reports the database as healthy", async () => {
+    const { status, checks } = await runHealthChecks();
+
+    expect(checks).toEqual({ database: "pass" });
+    expect(status).toBe("pass");
   });
 
   it("takes only the default name so far", () => {

@@ -4,12 +4,14 @@ import {
   type OperationNode,
   type QueryResult,
   SelectQueryNode,
+  sql,
 } from "kysely";
 import {
   batch as runBatch,
   getDb as getRuntimeDb,
   readAll as runReadAll,
 } from "#runtime";
+import { addHealthCheck } from "@acme/server";
 
 /**
  * Schemas by database name, filled with `declare module "@acme/db"`.
@@ -36,6 +38,12 @@ export type BatchResults<Queries extends readonly CompiledQuery[]> = {
 export const getDb = (_name: "default" = "default") => {
   return getRuntimeDb() as Kysely<Schema<"default">>;
 };
+
+// Runs on import, so `/_health?full` reports it in any app using the database.
+// Keep `"sideEffects": false` out of package.json, or bundlers drop this.
+addHealthCheck("database", async () => {
+  await sql`select 1`.execute(getDb());
+});
 
 /**
  * Runs compiled queries atomically, in order: all succeed or none do.
