@@ -12,7 +12,7 @@ import {
 } from "#runtime/db";
 
 /**
- * The app's schemas by database name, filled with `declare module "@acme/server/db"`.
+ * Schemas by database name, filled with `declare module "@acme/server/db"`.
  */
 // oxlint-disable-next-line no-empty-object-type
 export interface Databases {}
@@ -29,7 +29,9 @@ export type BatchResults<Queries extends readonly CompiledQuery[]> = {
 };
 
 /**
- * An app's database: D1 on workerd, `DATABASE_URL` on Node. Only `"default"` exists so far.
+ * The app's database: D1 on workerd, `DATABASE_URL` on Node.
+ *
+ * Only `"default"` exists so far.
  */
 export const getDb = (_name: "default" = "default") => {
   return getRuntimeDb() as Kysely<Schema<"default">>;
@@ -38,7 +40,7 @@ export const getDb = (_name: "default" = "default") => {
 /**
  * Runs compiled queries atomically, in order: all succeed or none do.
  *
- * Postgres retries the whole batch on a serialization failure, up to 10 attempts.
+ * Postgres retries the whole batch on serialization failures, up to 10 times.
  */
 export const batch = async <Queries extends readonly CompiledQuery[]>(
   db: Kysely<Schema<"default">>,

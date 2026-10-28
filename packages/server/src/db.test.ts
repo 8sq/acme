@@ -97,14 +97,13 @@ describe.runIf(isD1)("getDb on D1", () => {
 
   it("doesn't queue one getDb() behind another", async () => {
     const first = getDb();
-    expect(getDb()).not.toBe(first);
+    const second = getDb();
+    expect(second).not.toBe(first);
 
     // Holding the first instance's only connection stands in for a hung query.
-    const answer = await first
-      .connection()
-      .execute(async () =>
-        sql<{ one: number }>`select 1 as one`.execute(getDb()),
-      );
+    const answer = await first.connection().execute(async () => {
+      return sql<{ one: number }>`select 1 as one`.execute(second);
+    });
     expect(answer.rows).toEqual([{ one: 1 }]);
   });
 });
@@ -114,14 +113,24 @@ describe("batch", () => {
 
   it("returns RETURNING and SELECT results in order", async () => {
     const db = getDb();
+    const insertKibby = db
+      .insertInto("cat")
+      .values({ id: 1, name: "Kibby" })
+      .returning("id")
+      .compile();
+    const insertJane = db
+      .insertInto("cat")
+      .values({ id: 2, name: "Jane" })
+      .compile();
+    const selectNames = db
+      .selectFrom("cat")
+      .select("name")
+      .orderBy("id")
+      .compile();
     const [inserted, , cats] = await batch(db, [
-      db
-        .insertInto("cat")
-        .values({ id: 1, name: "Kibby" })
-        .returning("id")
-        .compile(),
-      db.insertInto("cat").values({ id: 2, name: "Jane" }).compile(),
-      db.selectFrom("cat").select("name").orderBy("id").compile(),
+      insertKibby,
+      insertJane,
+      selectNames,
     ]);
 
     expectTypeOf(inserted.rows).toEqualTypeOf<{ id: number }[]>();
@@ -132,22 +141,26 @@ describe("batch", () => {
   it("runs on a clone from withPlugin()", async () => {
     const db = getDb().withPlugin(new CamelCasePlugin());
     expect(getDbKind(db)).toBe(database);
-    const [inserted] = await batch(db, [
-      db
-        .insertInto("cat")
-        .values({ id: 1, name: "Kibby" })
-        .returning("name")
-        .compile(),
-    ]);
+    const insertKibby = db
+      .insertInto("cat")
+      .values({ id: 1, name: "Kibby" })
+      .returning("name")
+      .compile();
+    const [inserted] = await batch(db, [insertKibby]);
     expect(inserted.rows).toEqual([{ name: "Kibby" }]);
   });
 
   it("rolls back every statement when one fails", async () => {
     const db = getDb();
-    const failing = batch(db, [
-      db.insertInto("cat").values({ id: 1, name: "Kibby" }).compile(),
-      db.insertInto("cat").values({ id: 1, name: "Duplicate" }).compile(),
-    ]);
+    const insertKibby = db
+      .insertInto("cat")
+      .values({ id: 1, name: "Kibby" })
+      .compile();
+    const insertSameId = db
+      .insertInto("cat")
+      .values({ id: 1, name: "Duplicate" })
+      .compile();
+    const failing = batch(db, [insertKibby, insertSameId]);
     await expect(failing).rejects.toThrow();
 
     const cats = await db.selectFrom("cat").selectAll().execute();
@@ -161,10 +174,9 @@ describe("readAll", () => {
   it("returns SELECT results in order", async () => {
     const db = getDb();
     await db.insertInto("cat").values({ id: 1, name: "Kibby" }).execute();
-    const [names, ids] = await readAll(db, [
-      db.selectFrom("cat").select("name").compile(),
-      db.selectFrom("cat").select("id").compile(),
-    ]);
+    const selectNames = db.selectFrom("cat").select("name").compile();
+    const selectIds = db.selectFrom("cat").select("id").compile();
+    const [names, ids] = await readAll(db, [selectNames, selectIds]);
 
     expectTypeOf(names.rows).toEqualTypeOf<{ name: string }[]>();
     expect(names.rows).toEqual([{ name: "Kibby" }]);

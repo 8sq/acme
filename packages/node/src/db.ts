@@ -18,8 +18,9 @@ const maxBackoffMs = 200;
 
 const waitBeforeRetry = (attempt: number) => {
   const ceiling = Math.min(maxBackoffMs, 5 * 2 ** attempt);
+  const delay = Math.random() * ceiling;
   return new Promise((resolve) => {
-    setTimeout(resolve, Math.random() * ceiling);
+    setTimeout(resolve, delay);
   });
 };
 
@@ -65,7 +66,8 @@ const executeInOrder = async <Schema>(
   const results: QueryResult<unknown>[] = [];
   for (const query of queries) {
     // oxlint-disable-next-line no-await-in-loop
-    results.push(await db.executeQuery(query));
+    const result = await db.executeQuery(query);
+    results.push(result);
   }
   return results;
 };
@@ -115,7 +117,8 @@ const executeInParallel = <Schema>(
   db: Kysely<Schema>,
   queries: readonly CompiledQuery[],
 ) => {
-  return Promise.all(queries.map((query) => db.executeQuery(query)));
+  const pending = queries.map((query) => db.executeQuery(query));
+  return Promise.all(pending);
 };
 
 const databases = {
@@ -138,18 +141,18 @@ const databases = {
 type Kind = keyof typeof databases;
 const kinds = Object.keys(databases) as Kind[];
 
-const kindsByScheme = new Map(
-  kinds.flatMap((kind) => {
-    return databases[kind].schemes.map((scheme) => [scheme, kind] as const);
-  }),
-);
+const schemeKinds = kinds.flatMap((kind) => {
+  return databases[kind].schemes.map((scheme) => [scheme, kind] as const);
+});
+const kindsByScheme = new Map(schemeKinds);
 
-const kindsByIntrospector = new Map<unknown, Kind>(
-  kinds.map((kind) => [databases[kind].Introspector, kind]),
-);
+const introspectorKinds = kinds.map((kind) => {
+  return [databases[kind].Introspector, kind] as const;
+});
+const kindsByIntrospector = new Map<unknown, Kind>(introspectorKinds);
 
 /**
- * One Kysely per process, over `DATABASE_URL` (`sqlite:<path>` or `postgres://...`).
+ * One Kysely per process, from `DATABASE_URL` (`sqlite:<path>`, `postgres://`).
  */
 export const getDb = () => {
   if (!instance) {
@@ -165,7 +168,8 @@ export const getDb = () => {
     }
 
     const { createDialect } = databases[kind];
-    instance = new Kysely({ dialect: createDialect(url) });
+    const dialect = createDialect(url);
+    instance = new Kysely({ dialect });
   }
 
   return instance;
@@ -175,7 +179,6 @@ export const getDb = () => {
  * The database behind `db`, clones from `withPlugin()` and the like included.
  */
 export const getDbKind = <Schema>(db: Kysely<Schema>) => {
-  // Clones keep the dialect, and `introspection` is the public way to reach it.
   const kind = kindsByIntrospector.get(db.introspection.constructor);
   if (!kind) throw new Error("not a database from getDb()");
 

@@ -14,7 +14,7 @@ const postgres: TestProjectInlineConfiguration[] = postgresUrl
         test: {
           name: "node:postgres",
           include,
-          // Files share one database: in parallel they would drop each other's tables.
+          // One shared database: parallel files would drop each other's tables.
           fileParallelism: false,
           env: { DATABASE_URL: postgresUrl },
           provide: { database: "postgres" },

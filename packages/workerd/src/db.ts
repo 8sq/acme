@@ -10,7 +10,8 @@ export const getDb = () => {
     throw new Error(message);
   }
 
-  return new Kysely<unknown>({ dialect: new D1Dialect({ database }) });
+  const dialect = new D1Dialect({ database });
+  return new Kysely<unknown>({ dialect });
 };
 
 export const getDbKind = <Schema>(_db: Kysely<Schema>) => {
@@ -24,5 +25,5 @@ export const batch = <Schema>(
   return runBatch(db, queries);
 };
 
-// One D1 request for all of them; atomic too, though readAll() doesn't promise it.
+// One D1 request; atomic too, though readAll() doesn't promise it.
 export const readAll = batch;
