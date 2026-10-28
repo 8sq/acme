@@ -58,7 +58,15 @@ describe("getDb", () => {
     expect(left).toEqual([]);
   });
 
-  it.runIf(!isD1)("commits a transaction", async () => {
+  it("takes only the default name so far", () => {
+    expectTypeOf(getDb).parameter(0).toEqualTypeOf<"default" | undefined>();
+  });
+});
+
+describe.runIf(!isD1)("getDb on SQLite and Postgres", () => {
+  beforeEach(resetCatTable);
+
+  it("commits a transaction", async () => {
     await getDb()
       .transaction()
       .execute(async (trx) => {
@@ -69,7 +77,15 @@ describe("getDb", () => {
     expect(cats).toEqual([{ name: "Cattie" }]);
   });
 
-  it.runIf(isD1)("throws on a transaction", async () => {
+  it("keeps one instance per process", () => {
+    expect(getDb("default")).toBe(getDb());
+  });
+});
+
+describe.runIf(isD1)("getDb on D1", () => {
+  beforeEach(resetCatTable);
+
+  it("throws on a transaction", async () => {
     const transaction = getDb()
       .transaction()
       .execute(() => Promise.resolve());
@@ -79,11 +95,7 @@ describe("getDb", () => {
     );
   });
 
-  it.runIf(!isD1)("keeps one instance per process", () => {
-    expect(getDb("default")).toBe(getDb());
-  });
-
-  it.runIf(isD1)("doesn't queue one getDb() behind another", async () => {
+  it("doesn't queue one getDb() behind another", async () => {
     const first = getDb();
     expect(getDb()).not.toBe(first);
 
@@ -94,10 +106,6 @@ describe("getDb", () => {
         sql<{ one: number }>`select 1 as one`.execute(getDb()),
       );
     expect(answer.rows).toEqual([{ one: 1 }]);
-  });
-
-  it("takes only the default name so far", () => {
-    expectTypeOf(getDb).parameter(0).toEqualTypeOf<"default" | undefined>();
   });
 });
 
