@@ -1,5 +1,5 @@
 {
-  "name": "@acme/app",
+  "name": "@acme/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,7 @@
     }
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/entry.server.tsx"
+    ".": "./src/index.server.ts"
   },
   "dependencies": {
     "@acme/node": "workspace:*",
@@ -20,6 +19,7 @@
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@acme/workerd": "workspace:*",
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:"
   },
