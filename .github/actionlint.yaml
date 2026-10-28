@@ -1,0 +1,10 @@
+# actionlint 1.7.12 predates these GitHub-hosted labels.
+self-hosted-runner:
+  labels: [ubuntu-26.04, ubuntu-26.04-arm]
+
+# actionlint 1.7.12 rejects the `$/` self-repository syntax; drop once rhysd/actionlint#732 ships.
+paths:
+  .github/workflows/**:
+    ignore:
+      - reusable workflow call "\$/.+" at "uses" is not following the format
+      - specifying action "\$/.+" in invalid format because ref is missing

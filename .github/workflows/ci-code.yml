@@ -1,4 +1,4 @@
-name: ci
+name: ci:code
 
 on:
   pull_request:
@@ -9,21 +9,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-code-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
+  code:
+    name: lint and test
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
 
       - name: Check
         run: pnpm check

@@ -12,13 +12,13 @@ permissions:
 jobs:
   docker:
     if: github.event.action != 'closed'
-    uses: ./.github/workflows/target-docker.yml
+    uses: $/.github/workflows/target-docker.yml
     with:
       app: ygoma
 
   preview:
     if: github.event_name == 'pull_request'
-    uses: ./.github/workflows/target-cloudflare.yml
+    uses: $/.github/workflows/target-cloudflare.yml
     with:
       app: ygoma
       environment: preview
@@ -33,7 +33,7 @@ jobs:
 
   staging:
     if: github.event_name == 'push'
-    uses: ./.github/workflows/target-cloudflare.yml
+    uses: $/.github/workflows/target-cloudflare.yml
     with:
       app: ygoma
       environment: staging

@@ -119,9 +119,11 @@ jobs:
             exit 1
           fi
 
-          echo "should-deploy=$should_deploy" >> "$GITHUB_OUTPUT"
-          echo "should-delete=$should_delete" >> "$GITHUB_OUTPUT"
-          echo "has-token=$has_token" >> "$GITHUB_OUTPUT"
+          {
+            echo "should-deploy=$should_deploy"
+            echo "should-delete=$should_delete"
+            echo "has-token=$has_token"
+          } >> "$GITHUB_OUTPUT"
 
       # A branch slugged to "staging" must not take over <app>-staging.
       - name: Resolve names
@@ -151,13 +153,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
 
       - name: Build
         env:
@@ -171,7 +168,7 @@ jobs:
 
       - name: Probe locally
         id: local-probe
-        uses: ./.github/actions/probe
+        uses: $/.github/actions/probe
         with:
           url: http://127.0.0.1:8787/
           timeout-seconds: 30
@@ -201,14 +198,9 @@ jobs:
       group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
       cancel-in-progress: true
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
         with:
           install-args: --ignore-scripts
           cache: false
@@ -252,7 +244,7 @@ jobs:
           echo "url=https://$WORKER.$WORKERS_SUBDOMAIN.workers.dev" >> "$GITHUB_OUTPUT"
 
       - name: Probe Cloudflare
-        uses: ./.github/actions/probe
+        uses: $/.github/actions/probe
         with:
           url: ${{ steps.deploy.outputs.url }}/
           credentials: ${{ inputs.environment != 'production' && secrets.BASIC_AUTH || '' }}
@@ -271,14 +263,9 @@ jobs:
       group: target-cloudflare-${{ inputs.app }}-${{ inputs.environment }}-${{ inputs.branch }}
       cancel-in-progress: false
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       # No dependency code runs beside the secrets; a build job's cache could be tampered with.
       - name: Setup
-        uses: ./.github/actions/setup
+        uses: $/.github/actions/setup
         with:
           install-args: --ignore-scripts
           cache: false
