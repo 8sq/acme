@@ -7,9 +7,6 @@
     ".": "./src/index.ts",
     "./db": "./src/db.ts"
   },
-  "scripts": {
-    "test": "vitest run"
-  },
   "dependencies": {
     "kysely": "catalog:"
   },

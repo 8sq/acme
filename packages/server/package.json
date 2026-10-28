@@ -25,9 +25,12 @@
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@acme/workerd": "workspace:*",
+    "@cloudflare/vitest-plugin": "catalog:",
+    "@cloudflare/workers-types": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "@types/react-dom": "catalog:"
+    "@types/react-dom": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "better-sqlite3": "catalog:",

@@ -12,3 +12,7 @@ export const getDb = () => {
 
   return new Kysely<unknown>({ dialect: new D1Dialect({ database }) });
 };
+
+export const getDbKind = () => {
+  return "d1" as const;
+};
