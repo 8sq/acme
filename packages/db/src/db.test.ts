@@ -28,20 +28,27 @@ declare module "./index.server.ts" {
       cat: { id: number; name: string };
       seat: { id: number };
     };
+    audit: {
+      cat: { id: number; name: string };
+    };
   }
 }
 
 const database = inject("database");
 const isD1 = database === "d1";
 
-const resetCatTable = async () => {
-  const db = getDb();
+const resetCatTableIn = async (name: "default" | "audit") => {
+  const db = getDb(name);
   await db.schema.dropTable("cat").ifExists().execute();
   await db.schema
     .createTable("cat")
     .addColumn("id", "integer", (column) => column.primaryKey())
     .addColumn("name", "text", (column) => column.notNull())
     .execute();
+};
+
+const resetCatTable = () => {
+  return resetCatTableIn("default");
 };
 
 describe("getDb", () => {
@@ -86,12 +93,29 @@ describe("getDb", () => {
   });
 
   it("throws on a name @acme/vite didn't list", () => {
-    const getAudit = () => {
-      return getDb("audit" as "default");
+    const getUnlisted = () => {
+      return getDb("nope" as "default");
     };
-    expect(getAudit).toThrow(
-      'database "audit" is not in @acme/vite\'s databases',
+    expect(getUnlisted).toThrow(
+      'database "nope" is not in @acme/vite\'s databases',
     );
+  });
+});
+
+describe("getDb with two databases", () => {
+  beforeEach(async () => {
+    await resetCatTableIn("default");
+    await resetCatTableIn("audit");
+  });
+
+  it("keeps a row written to one out of the other", async () => {
+    await getDb().insertInto("cat").values({ id: 1, name: "Cattie" }).execute();
+    const auditCats = await getDb("audit")
+      .selectFrom("cat")
+      .selectAll()
+      .execute();
+
+    expect(auditCats).toEqual([]);
   });
 });
 
