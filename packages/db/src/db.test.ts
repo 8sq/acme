@@ -1,7 +1,17 @@
 import { CamelCasePlugin, sql } from "kysely";
-import { beforeEach, describe, expect, expectTypeOf, inject, it } from "vitest";
-import { getDbKind } from "#runtime/db";
-import { batch, getDb, readAll } from "./db.server.ts";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  inject,
+  it,
+  vi,
+} from "vitest";
+import { getDbKind } from "#runtime";
+import { batch, getDb, readAll } from "./index.server.ts";
+import { type Migrations, migrate } from "./migrate.server.ts";
 
 type DatabaseKind = "sqlite" | "d1" | "postgres";
 
@@ -11,7 +21,7 @@ declare module "vitest" {
   }
 }
 
-declare module "./db.server.ts" {
+declare module "./index.server.ts" {
   interface Databases {
     default: { cat: { id: number; name: string } };
   }
@@ -79,6 +89,39 @@ describe.runIf(!isD1)("getDb on SQLite and Postgres", () => {
 
   it("keeps one instance per process", () => {
     expect(getDb("default")).toBe(getDb());
+  });
+});
+
+const importFreshGetDb = async (url?: string) => {
+  vi.stubEnv("DATABASE_URL", url);
+  const { getDb: getFreshDb } = await import("#runtime");
+  return getFreshDb;
+};
+
+describe.runIf(!isD1)("DATABASE_URL on SQLite and Postgres", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("fails when DATABASE_URL is missing", async () => {
+    const getFreshDb = await importFreshGetDb();
+    expect(getFreshDb).toThrow("DATABASE_URL is not set");
+  });
+
+  it("names an unknown scheme without echoing the URL", async () => {
+    const getFreshDb = await importFreshGetDb("mysql://admin:hunter2@host/app");
+    expect(getFreshDb).toThrow('DATABASE_URL: unsupported scheme "mysql:"');
+  });
+
+  it("refuses a scheme named after an Object.prototype key", async () => {
+    const getFreshDb = await importFreshGetDb("constructor:x");
+    expect(getFreshDb).toThrow(
+      'DATABASE_URL: unsupported scheme "constructor:"',
+    );
   });
 });
 
@@ -202,5 +245,119 @@ describe("readAll", () => {
     }
     const cats = await db.selectFrom("cat").selectAll().execute();
     expect(cats).toEqual([]);
+  });
+});
+
+const createTableMigration = (name: string) => {
+  return {
+    up: async (db) => {
+      await db.schema
+        .createTable(name)
+        .addColumn("id", "integer", (column) => column.primaryKey())
+        .execute();
+    },
+    down: async (db) => {
+      await db.schema.dropTable(name).execute();
+    },
+  } satisfies Migrations[string];
+};
+
+const migrations: Migrations = {
+  "0001_widget": createTableMigration("widget"),
+  "0002_gadget": createTableMigration("gadget"),
+};
+
+const brokenMigrations: Migrations = {
+  "0001_widget": createTableMigration("widget"),
+  "0002_broken": {
+    up: async (db) => {
+      await createTableMigration("gadget").up(db);
+      throw new Error("broken on purpose");
+    },
+  },
+};
+
+const resetMigrationTables = async () => {
+  const db = getDb();
+  const tables = [
+    "gadget",
+    "widget",
+    "kysely_migration",
+    "kysely_migration_lock",
+  ];
+  for (const table of tables) {
+    // oxlint-disable-next-line no-await-in-loop
+    await db.schema.dropTable(table).ifExists().execute();
+  }
+};
+
+const getMigratedTables = async () => {
+  const tables = await getDb().introspection.getTables();
+  const names = tables.map((table) => table.name);
+  return names
+    .filter((name) => name === "gadget" || name === "widget")
+    .toSorted();
+};
+
+describe("migrate", () => {
+  beforeEach(resetMigrationTables);
+
+  it("migrates up in key order", async () => {
+    const results = await migrate(getDb(), migrations, "up");
+
+    expect(results.map((result) => result.migrationName)).toEqual([
+      "0001_widget",
+      "0002_gadget",
+    ]);
+    expect(await getMigratedTables()).toEqual(["gadget", "widget"]);
+  });
+
+  it("does nothing when up to date", async () => {
+    await migrate(getDb(), migrations, "up");
+    const results = await migrate(getDb(), migrations, "up");
+
+    expect(results).toEqual([]);
+  });
+
+  it("migrates down one step", async () => {
+    await migrate(getDb(), migrations, "up");
+    const results = await migrate(getDb(), migrations, "down");
+
+    expect(results.map((result) => result.migrationName)).toEqual([
+      "0002_gadget",
+    ]);
+    expect(await getMigratedTables()).toEqual(["widget"]);
+  });
+
+  it("releases its lock after a failure", async () => {
+    const failing = migrate(getDb(), brokenMigrations, "up");
+    await expect(failing).rejects.toThrow("migration failed");
+
+    // A held lock would make this run throw instead.
+    const widgetOnly = { "0001_widget": createTableMigration("widget") };
+    const retry = migrate(getDb(), widgetOnly, "up");
+    await expect(retry).resolves.toBeDefined();
+  });
+});
+
+describe.runIf(!isD1)("migrate on SQLite and Postgres", () => {
+  beforeEach(resetMigrationTables);
+
+  it("leaves the schema untouched when a migration fails", async () => {
+    const failing = migrate(getDb(), brokenMigrations, "up");
+    await expect(failing).rejects.toThrow("migration failed");
+
+    expect(await getMigratedTables()).toEqual([]);
+  });
+});
+
+describe.runIf(isD1)("migrate on D1", () => {
+  beforeEach(resetMigrationTables);
+
+  it("keeps what ran before a failure: D1 has no transactions", async () => {
+    const failing = migrate(getDb(), brokenMigrations, "up");
+    await expect(failing).rejects.toThrow("migration failed");
+
+    expect(await getMigratedTables()).toEqual(["gadget", "widget"]);
   });
 });

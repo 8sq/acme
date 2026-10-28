@@ -1,0 +1,39 @@
+{
+  "name": "@acme/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#runtime": {
+      "workerd": "@acme/workerd/db",
+      "default": "@acme/node/db"
+    }
+  },
+  "exports": {
+    ".": "./src/index.server.ts",
+    "./migrate": "./src/migrate.server.ts"
+  },
+  "dependencies": {
+    "@acme/node": "workspace:*",
+    "kysely": "catalog:"
+  },
+  "devDependencies": {
+    "@acme/tsconfig": "workspace:*",
+    "@acme/workerd": "workspace:*",
+    "@cloudflare/vitest-plugin": "catalog:",
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "catalog:",
+    "pg": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
+  }
+}

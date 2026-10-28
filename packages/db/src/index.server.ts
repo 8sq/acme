@@ -9,10 +9,10 @@ import {
   batch as runBatch,
   getDb as getRuntimeDb,
   readAll as runReadAll,
-} from "#runtime/db";
+} from "#runtime";
 
 /**
- * Schemas by database name, filled with `declare module "@acme/server/db"`.
+ * Schemas by database name, filled with `declare module "@acme/db"`.
  */
 // oxlint-disable-next-line no-empty-object-type
 export interface Databases {}

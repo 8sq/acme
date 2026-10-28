@@ -1,9 +1,11 @@
+// oxlint-disable max-classes-per-file -- Kysely extends by subclassing
 import {
   type CompiledQuery,
   Kysely,
   PostgresDialect,
   PostgresIntrospector,
   type QueryResult,
+  SqliteAdapter,
   SqliteDialect,
   SqliteIntrospector,
   sql,
@@ -37,9 +39,25 @@ const importDriver = async <Driver>(
   }
 };
 
+// SQLite runs DDL in transactions; Kysely's adapter says otherwise, so the
+// migrator would apply migrations one by one and leave failures half-done.
+class TransactionalSqliteAdapter extends SqliteAdapter {
+  // oxlint-disable-next-line class-methods-use-this
+  public override get supportsTransactionalDdl() {
+    return true;
+  }
+}
+
+class TransactionalSqliteDialect extends SqliteDialect {
+  // oxlint-disable-next-line class-methods-use-this
+  public override createAdapter() {
+    return new TransactionalSqliteAdapter();
+  }
+}
+
 const createSqliteDialect = (url: string) => {
   const path = url.slice("sqlite:".length);
-  return new SqliteDialect({
+  return new TransactionalSqliteDialect({
     database: async () => {
       const Database = await importDriver(
         () => import("better-sqlite3"),

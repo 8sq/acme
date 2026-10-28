@@ -16,8 +16,7 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "better-sqlite3": "catalog:",
-    "pg": "catalog:",
-    "vitest": "catalog:"
+    "pg": "catalog:"
   },
   "peerDependencies": {
     "better-sqlite3": "catalog:",

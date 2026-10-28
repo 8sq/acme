@@ -7,44 +7,25 @@
     "#runtime": {
       "workerd": "@acme/workerd",
       "default": "@acme/node"
-    },
-    "#runtime/db": {
-      "workerd": "@acme/workerd/db",
-      "default": "@acme/node/db"
     }
   },
   "exports": {
-    ".": "./src/index.server.ts",
-    "./db": "./src/db.server.ts"
+    ".": "./src/index.server.ts"
   },
   "dependencies": {
     "@acme/node": "workspace:*",
-    "isbot": "catalog:",
-    "kysely": "catalog:"
+    "isbot": "catalog:"
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@acme/workerd": "workspace:*",
-    "@cloudflare/vitest-plugin": "catalog:",
-    "@cloudflare/workers-types": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "vitest": "catalog:"
+    "@types/react-dom": "catalog:"
   },
   "peerDependencies": {
-    "better-sqlite3": "catalog:",
-    "pg": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "catalog:"
-  },
-  "peerDependenciesMeta": {
-    "better-sqlite3": {
-      "optional": true
-    },
-    "pg": {
-      "optional": true
-    }
   }
 }
