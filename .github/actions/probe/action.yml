@@ -1,9 +1,12 @@
 name: Probe
-description: Wait until a URL serves the app's hello page.
+description: Wait until a URL serves the given build, healthy, and its home page.
 
 inputs:
   url:
-    description: URL to fetch, e.g. http://localhost:3000/.
+    description: App base URL, e.g. http://localhost:3000; a trailing / is dropped.
+    required: true
+  sha:
+    description: Commit the build was stamped with; /_health must report its first 7 characters.
     required: true
   credentials:
     description: Basic auth user:password; empty sends none.
@@ -21,23 +24,39 @@ runs:
       shell: bash
       env:
         URL: ${{ inputs.url }}
+        SHA: ${{ inputs.sha }}
         CREDENTIALS: ${{ inputs.credentials }}
         TIMEOUT: ${{ inputs.timeout-seconds }}
       run: |
+        if [ -z "$SHA" ]; then
+          echo "::error::No sha to probe for."
+          exit 1
+        fi
+        revision=${SHA::7}
+
         auth_args=()
         if [ -n "$CREDENTIALS" ]; then
           auth_args=(--user "$CREDENTIALS")
         fi
 
+        base_url=${URL%/}
+        # A previous deployment also answers 200: only its revision tells it apart.
+        health_url="$base_url/_health?full"
         deadline=$((SECONDS + TIMEOUT))
+        page=unchecked
         while [ "$SECONDS" -lt "$deadline" ]; do
-          body=$(curl -fs --max-time 5 "${auth_args[@]}" "$URL" || true)
-          # React's SSR puts `<!-- -->` between "Hello from " and the runtime name.
-          if grep -qE 'Hello from (<!-- -->)?(node|workerd)' <<< "$body"; then
-            exit 0
+          health=$(curl -fs --max-time 5 "${auth_args[@]}" "$health_url" || true)
+          release=$(jq -r '.release // empty' <<< "$health" 2> /dev/null || true)
+          status=$(jq -r '.status // empty' <<< "$health" 2> /dev/null || true)
+          if [ "${release##*+}" = "$revision" ] && [ "$status" = "pass" ]; then
+            # /_health renders no React; a 200 here proves the page path works.
+            if curl -fs -o /dev/null --max-time 5 "${auth_args[@]}" "$base_url/"; then
+              exit 0
+            fi
+            page=failing
           fi
           sleep 1
         done
 
-        echo "::error::$URL did not serve the hello page within ${TIMEOUT}s."
+        echo "::error::$base_url did not serve +$revision, healthy, with its home page within ${TIMEOUT}s (last: release ${release:-none}, status ${status:-none}, page $page)."
         exit 1

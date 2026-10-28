@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # The PR head, not the merge commit GitHub builds: the one a reader can look up.
+  HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 concurrency:
   group: target-docker-${{ inputs.app }}-${{ github.ref }}
   cancel-in-progress: true
@@ -32,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Build image
-        run: docker build -f "apps/$APP/Dockerfile" -t "$APP" .
+        run: docker build -f "apps/$APP/Dockerfile" --build-arg "APP_REVISION=$HEAD_SHA" -t "$APP" .
 
       - name: Start container
         run: docker run -d --name "$APP" -p 3000:3000 "$APP"
@@ -40,7 +44,8 @@ jobs:
       - name: Probe container
         uses: $/.github/actions/probe
         with:
-          url: http://localhost:3000/
+          url: http://localhost:3000
+          sha: ${{ env.HEAD_SHA }}
           timeout-seconds: 30
 
       - name: Show container logs

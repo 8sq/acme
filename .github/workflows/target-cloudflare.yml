@@ -42,6 +42,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # The PR head, not the merge commit GitHub builds: the one a reader can look up.
+  HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   checks:
     runs-on: ubuntu-26.04
@@ -159,6 +163,7 @@ jobs:
       - name: Build
         env:
           APP: ${{ inputs.app }}
+          APP_REVISION: ${{ env.HEAD_SHA }}
         run: pnpm --filter "@acme/$APP..." run build:workerd
 
       # Probed on every run, so forks (no token, no deploy) are probed too.
@@ -170,7 +175,8 @@ jobs:
         id: local-probe
         uses: $/.github/actions/probe
         with:
-          url: http://127.0.0.1:8787/
+          url: http://127.0.0.1:8787
+          sha: ${{ env.HEAD_SHA }}
           timeout-seconds: 30
 
       - name: Show local worker logs
@@ -246,7 +252,8 @@ jobs:
       - name: Probe Cloudflare
         uses: $/.github/actions/probe
         with:
-          url: ${{ steps.deploy.outputs.url }}/
+          url: ${{ steps.deploy.outputs.url }}
+          sha: ${{ env.HEAD_SHA }}
           credentials: ${{ inputs.environment != 'production' && secrets.BASIC_AUTH || '' }}
 
   delete:
