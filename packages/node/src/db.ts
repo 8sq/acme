@@ -1,11 +1,18 @@
-import { type Dialect, Kysely, PostgresDialect, SqliteDialect } from "kysely";
+import {
+  type CompiledQuery,
+  Kysely,
+  PostgresDialect,
+  PostgresIntrospector,
+  type QueryResult,
+  SqliteDialect,
+  SqliteIntrospector,
+  sql,
+} from "kysely";
 
-let db: Kysely<unknown> | undefined;
+let instance: Kysely<unknown> | undefined;
 
-type Scheme = [
-  kind: "sqlite" | "postgres",
-  createDialect: (url: string) => Dialect,
-];
+// Postgres serialization failures; a batch is fixed SQL, so retrying is safe.
+const batchAttempts = 3;
 
 const importDriver = async <Driver>(
   load: () => Promise<{ default: Driver }>,
@@ -42,48 +49,141 @@ const createPostgresDialect = (url: string) => {
   });
 };
 
-const schemes = new Map<string, Scheme>(
-  Object.entries({
-    sqlite: ["sqlite", createSqliteDialect],
-    postgres: ["postgres", createPostgresDialect],
-    postgresql: ["postgres", createPostgresDialect],
+const executeInOrder = async <Schema>(
+  db: Kysely<Schema>,
+  queries: readonly CompiledQuery[],
+) => {
+  const results: QueryResult<unknown>[] = [];
+  for (const query of queries) {
+    // oxlint-disable-next-line no-await-in-loop
+    results.push(await db.executeQuery(query));
+  }
+  return results;
+};
+
+const batchSqlite = <Schema>(
+  db: Kysely<Schema>,
+  queries: readonly CompiledQuery[],
+) => {
+  // IMMEDIATE takes the write lock up front instead of failing on upgrade.
+  return db.connection().execute(async (connection) => {
+    await sql`begin immediate`.execute(connection);
+    try {
+      const results = await executeInOrder(connection, queries);
+      await sql`commit`.execute(connection);
+      return results;
+    } catch (error) {
+      await sql`rollback`.execute(connection);
+      throw error;
+    }
+  });
+};
+
+const isSerializationFailure = (error: unknown) => {
+  return error instanceof Error && "code" in error && error.code === "40001";
+};
+
+const batchPostgres = async <Schema>(
+  db: Kysely<Schema>,
+  queries: readonly CompiledQuery[],
+  attempt = 1,
+): Promise<QueryResult<unknown>[]> => {
+  try {
+    return await db
+      .transaction()
+      .setIsolationLevel("serializable")
+      .execute((trx) => executeInOrder(trx, queries));
+  } catch (error) {
+    if (attempt < batchAttempts && isSerializationFailure(error)) {
+      return batchPostgres(db, queries, attempt + 1);
+    }
+    throw error;
+  }
+};
+
+const executeInParallel = <Schema>(
+  db: Kysely<Schema>,
+  queries: readonly CompiledQuery[],
+) => {
+  return Promise.all(queries.map((query) => db.executeQuery(query)));
+};
+
+const databases = {
+  sqlite: {
+    schemes: ["sqlite"],
+    Introspector: SqliteIntrospector,
+    createDialect: createSqliteDialect,
+    batch: batchSqlite,
+    readAll: executeInOrder,
+  },
+  postgres: {
+    schemes: ["postgres", "postgresql"],
+    Introspector: PostgresIntrospector,
+    createDialect: createPostgresDialect,
+    batch: batchPostgres,
+    readAll: executeInParallel,
+  },
+};
+
+type Kind = keyof typeof databases;
+const kinds = Object.keys(databases) as Kind[];
+
+const kindsByScheme = new Map(
+  kinds.flatMap((kind) => {
+    return databases[kind].schemes.map((scheme) => [scheme, kind] as const);
   }),
 );
 
-const getUrl = () => {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-
-  return url;
-};
-
-const getScheme = (url: string) => {
-  // The name only: a postgres URL carries a password.
-  const name = url.split(":", 1)[0] ?? "";
-  const scheme = schemes.get(name);
-  if (scheme) return scheme;
-
-  const message = `DATABASE_URL: unsupported scheme "${name}:"`;
-  throw new Error(message);
-};
+const kindsByIntrospector = new Map<unknown, Kind>(
+  kinds.map((kind) => [databases[kind].Introspector, kind]),
+);
 
 /**
  * One Kysely per process, over `DATABASE_URL` (`sqlite:<path>` or `postgres://...`).
  */
 export const getDb = () => {
-  if (!db) {
-    const url = getUrl();
-    const [, createDialect] = getScheme(url);
-    db = new Kysely({ dialect: createDialect(url) });
+  if (!instance) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set");
+
+    // The scheme only: a postgres URL carries a password.
+    const scheme = url.split(":", 1)[0] ?? "";
+    const kind = kindsByScheme.get(scheme);
+    if (!kind) {
+      const message = `DATABASE_URL: unsupported scheme "${scheme}:"`;
+      throw new Error(message);
+    }
+
+    const { createDialect } = databases[kind];
+    instance = new Kysely({ dialect: createDialect(url) });
   }
 
-  return db;
+  return instance;
 };
 
 /**
- * The database `getDb()` connects to, from the `DATABASE_URL` scheme.
+ * The database behind `db`, clones from `withPlugin()` and the like included.
  */
-export const getDbKind = () => {
-  const [kind] = getScheme(getUrl());
+export const getDbKind = <Schema>(db: Kysely<Schema>) => {
+  // Clones keep the dialect, and `introspection` is the public way to reach it.
+  const kind = kindsByIntrospector.get(db.introspection.constructor);
+  if (!kind) throw new Error("not a database from getDb()");
+
   return kind;
+};
+
+export const batch = <Schema>(
+  db: Kysely<Schema>,
+  queries: readonly CompiledQuery[],
+) => {
+  const database = databases[getDbKind(db)];
+  return database.batch(db, queries);
+};
+
+export const readAll = <Schema>(
+  db: Kysely<Schema>,
+  queries: readonly CompiledQuery[],
+) => {
+  const database = databases[getDbKind(db)];
+  return database.readAll(db, queries);
 };
