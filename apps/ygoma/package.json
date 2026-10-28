@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@acme/app": "workspace:*",
+    "@acme/router": "workspace:*",
     "@react-router/serve": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
