@@ -8,8 +8,11 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Every runner label, matrix included; the built-in manager only reads runs-on",
-      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "description": "Every runner label, matrix and actionlint.yaml included; the built-in manager only reads runs-on",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/",
+        "/^\\.github/actionlint\\.ya?ml$/"
+      ],
       "matchStrings": [
         "\\b(?<depName>ubuntu|macos|windows)-(?<currentValue>\\d+(?:\\.\\d+)?(?:-(?:arm|intel|large|xlarge))?)\\b"
       ],
