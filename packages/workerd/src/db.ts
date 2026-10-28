@@ -3,10 +3,11 @@ import { type CompiledQuery, Kysely } from "kysely";
 import { D1Dialect, batch as runBatch } from "kysely-cloudflare";
 
 // Fresh per call: the dialect runs one query at a time per instance.
-export const getDb = () => {
-  const { DEFAULT_DB: database } = env as { DEFAULT_DB?: D1Database };
+export const getDb = (name: string) => {
+  const binding = `${name.toUpperCase()}_DB`;
+  const database = (env as Record<string, D1Database | undefined>)[binding];
   if (!database) {
-    const message = "no D1 binding named DEFAULT_DB: add it to wrangler.jsonc";
+    const message = `no D1 binding named ${binding}: add it to wrangler.jsonc`;
     throw new Error(message);
   }
 

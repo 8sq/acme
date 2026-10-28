@@ -11,7 +11,7 @@ import {
   sql,
 } from "kysely";
 
-let instance: Kysely<unknown> | undefined;
+const instances = new Map<string, Kysely<unknown>>();
 
 // Postgres serialization failures; a batch is fixed SQL, so retrying is safe.
 const batchAttempts = 10;
@@ -29,12 +29,13 @@ const waitBeforeRetry = (attempt: number) => {
 const importDriver = async <Driver>(
   load: () => Promise<{ default: Driver }>,
   name: string,
+  variable: string,
 ) => {
   try {
     const { default: driver } = await load();
     return driver;
   } catch (error) {
-    const message = `DATABASE_URL needs the ${name} package installed`;
+    const message = `${variable} needs the ${name} package installed`;
     throw new Error(message, { cause: error });
   }
 };
@@ -55,23 +56,24 @@ class TransactionalSqliteDialect extends SqliteDialect {
   }
 }
 
-const createSqliteDialect = (url: string) => {
+const createSqliteDialect = (url: string, variable: string) => {
   const path = url.slice("sqlite:".length);
   return new TransactionalSqliteDialect({
     database: async () => {
       const Database = await importDriver(
         () => import("better-sqlite3"),
         "better-sqlite3",
+        variable,
       );
       return new Database(path);
     },
   });
 };
 
-const createPostgresDialect = (url: string) => {
+const createPostgresDialect = (url: string, variable: string) => {
   return new PostgresDialect({
     pool: async () => {
-      const pg = await importDriver(() => import("pg"), "pg");
+      const pg = await importDriver(() => import("pg"), "pg", variable);
       return new pg.Pool({ connectionString: url });
     },
   });
@@ -169,25 +171,33 @@ const introspectorKinds = kinds.map((kind) => {
 });
 const kindsByIntrospector = new Map<unknown, Kind>(introspectorKinds);
 
+const createDb = (name: string) => {
+  const variable = `${name.toUpperCase()}_DATABASE_URL`;
+  const url = process.env[variable];
+  if (!url) throw new Error(`${variable} is not set`);
+
+  // The scheme only: a postgres URL carries a password.
+  const scheme = url.split(":", 1)[0] ?? "";
+  const kind = kindsByScheme.get(scheme);
+  if (!kind) {
+    const message = `${variable}: unsupported scheme "${scheme}:"`;
+    throw new Error(message);
+  }
+
+  const { createDialect } = databases[kind];
+  const dialect = createDialect(url, variable);
+  return new Kysely<unknown>({ dialect });
+};
+
 /**
- * One Kysely per process, from `DATABASE_URL` (`sqlite:<path>`, `postgres://`).
+ * One Kysely per name per process, from `<NAME>_DATABASE_URL` (`sqlite:<path>`,
+ * `postgres://`).
  */
-export const getDb = () => {
+export const getDb = (name: string) => {
+  let instance = instances.get(name);
   if (!instance) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set");
-
-    // The scheme only: a postgres URL carries a password.
-    const scheme = url.split(":", 1)[0] ?? "";
-    const kind = kindsByScheme.get(scheme);
-    if (!kind) {
-      const message = `DATABASE_URL: unsupported scheme "${scheme}:"`;
-      throw new Error(message);
-    }
-
-    const { createDialect } = databases[kind];
-    const dialect = createDialect(url);
-    instance = new Kysely({ dialect });
+    instance = createDb(name);
+    instances.set(name, instance);
   }
 
   return instance;
