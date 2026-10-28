@@ -1,0 +1,21 @@
+name: ygoma-staging
+
+on:
+  push:
+    branches: [main, staging-deploy]
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    uses: ./.github/workflows/target-cloudflare.yml
+    with:
+      app: ygoma
+      environment: staging
+      workers-subdomain: ygoma-stg
+    # Caller-side values are empty; named here so the called jobs read ygoma-staging's.
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
