@@ -48,13 +48,20 @@ const getRejection = async (request: Request, secret: string) => {
   });
 };
 
+// Exact paths: deploy probes read them without credentials; they hold nothing sensitive.
+const openPaths = new Set(["/_health"]);
+
 // No BASIC_AUTH means no gate; a malformed one answers 503.
 export const withStagingAuth = <HandlerEnv extends StagingAuthEnv>(
   handler: (request: Request, env: HandlerEnv) => Response | Promise<Response>,
 ) => {
   return async (request: Request, env: HandlerEnv) => {
     const secret = env.BASIC_AUTH;
-    if (secret === undefined) return handler(request, env);
+    const { pathname } = new URL(request.url);
+    const isOpen = openPaths.has(pathname);
+    if (secret === undefined || isOpen) {
+      return handler(request, env);
+    }
 
     const rejection = await getRejection(request, secret);
     const response = rejection ?? (await handler(request, env));

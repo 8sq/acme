@@ -106,7 +106,9 @@
       "rules": {
         "unicorn/require-module-specifiers": "off",
         // An ambient `declare module` file must not be a module itself
-        "import/unambiguous": "off"
+        "import/unambiguous": "off",
+        // Build-time globals are named `__X__`
+        "eslint/no-underscore-dangle": "off"
       }
     }
   ]
