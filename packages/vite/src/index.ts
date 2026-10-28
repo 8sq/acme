@@ -29,7 +29,7 @@ const createIdentityPlugin = (): Plugin => ({
       NAME: appPackage.name.replace(/^@[^/]+\//u, ""),
       VERSION: appPackage.version,
       ENV: readEnv("APP_ENV", "development"),
-      REVISION: readEnv("APP_REVISION", "dev"),
+      REVISION: readEnv("APP_REVISION", "dev").slice(0, 7),
     };
 
     const define: Record<string, string> = {};
