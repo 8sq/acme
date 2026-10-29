@@ -1,5 +1,5 @@
 name: Probe Docker
-description: Run an image, probe it, then require a clean stop on SIGTERM.
+description: Run an image, probe it, then require a clean exit on SIGTERM.
 
 inputs:
   image:
@@ -25,8 +25,6 @@ inputs:
 
 runs:
   using: composite
-  # Explicit outcomes: the docs leave unclear whether failure() sees the job's
-  # steps, which would skip the Postgres run after a SQLite failure.
   steps:
     - name: Start container
       id: start
@@ -44,8 +42,6 @@ runs:
           "${docker_args[@]}" "$IMAGE"
 
     - name: Probe container
-      id: probe
-      if: "!cancelled() && steps.start.outcome == 'success'"
       uses: $/.github/actions/probe
       with:
         url: http://localhost:${{ inputs.port }}
@@ -53,25 +49,29 @@ runs:
         timeout-seconds: 30
 
     - name: Stop container
-      id: stop
-      if: "!cancelled() && steps.probe.outcome == 'success'"
       shell: bash
       env:
         CONTAINER: ${{ inputs.container }}
       run: |
-        started=$SECONDS
-        docker stop -t 10 "$CONTAINER" > /dev/null
-        took=$((SECONDS - started))
+        grace=10
+        started=$(date +%s%N)
+        docker stop -t "$grace" "$CONTAINER" > /dev/null
+        took_ms=$((($(date +%s%N) - started) / 1000000))
         code=$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER")
         if [ "$code" != 0 ]; then
-          # 137 is SIGKILL: docker stop gave up after the 10s grace period.
-          echo "::error::$CONTAINER exited $code after ${took}s instead of stopping on SIGTERM."
+          # 137 is SIGKILL: docker stop gave up after the grace period.
+          echo "::error::$CONTAINER exited $code after ${took_ms}ms instead of stopping on SIGTERM."
           exit 1
         fi
-        echo "::notice::$CONTAINER stopped cleanly in ${took}s."
+        # Exit 0 this close to SIGKILL is luck: a slower runner gets killed.
+        if [ "$took_ms" -ge $((grace * 900)) ]; then
+          echo "::error::$CONTAINER took ${took_ms}ms of its ${grace}s grace period to stop."
+          exit 1
+        fi
+        echo "::notice::$CONTAINER stopped cleanly in ${took_ms}ms."
 
     - name: Show container logs
-      if: "!cancelled() && (steps.probe.outcome == 'failure' || steps.stop.outcome == 'failure')"
+      if: failure() && steps.start.outcome == 'success'
       shell: bash
       env:
         CONTAINER: ${{ inputs.container }}
