@@ -109,7 +109,7 @@ const getTables = async (url: string) => {
 const startOtherRun = async (url: string) => {
   const statements = [
     "create table widget (id integer primary key)",
-    "insert into kysely_migration (name, timestamp) values ('00_0001_create_widget', '2026-10-29T00:00:00.000Z')",
+    "insert into kysely_migration (name, timestamp) values ('0000_0001_create_widget', '2026-10-29T00:00:00.000Z')",
   ];
   if (url.startsWith("sqlite:")) {
     const database = new Database(url.slice("sqlite:".length));
@@ -170,19 +170,19 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
 
     expect(run).toMatchObject({ code: 0, stderr: "" });
     expect(run.stdout.trim().split("\n")).toEqual([
-      "default: applied 00_0001_create_widget",
-      "default: applied 00_0002_create_gadget",
-      "default: applied 01_0001_create_gizmo",
-      "audit: applied 00_0001_create_entry",
+      "default: applied 0000_0001_create_widget",
+      "default: applied 0000_0002_create_gadget",
+      "default: applied 0001_0001_create_gizmo",
+      "audit: applied 0000_0001_create_entry",
     ]);
   });
 
   it.each([
-    { from: "01", target: "00_0001_create_widget", tables: ["widget"] },
-    { from: "01", target: "00_0002", tables: ["gadget", "widget"] },
-    { from: "01", target: "00", tables: ["gadget", "widget"] },
-    { from: "01", target: "none", tables: [] },
-    { from: "none", target: "01", tables: ["gadget", "gizmo", "widget"] },
+    { from: "0001", target: "0000_0001_create_widget", tables: ["widget"] },
+    { from: "0001", target: "0000_0002", tables: ["gadget", "widget"] },
+    { from: "0001", target: "0000", tables: ["gadget", "widget"] },
+    { from: "0001", target: "none", tables: [] },
+    { from: "none", target: "0001", tables: ["gadget", "gizmo", "widget"] },
   ])("moves from $from to $target", async ({ from, target, tables }) => {
     await runMigrate(env, [from, "--db", "default"]);
     const run = await runMigrate(env, [target, "--db", "default"]);
@@ -197,7 +197,7 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
 
     expect(run.code).toBe(1);
     expect(run.stderr).toContain(
-      'database "audit": migration failed at 00_0001_create_entry',
+      'database "audit": migration failed at 0000_0001_create_entry',
     );
     expect(await getTables(env.DEFAULT_DATABASE_URL)).toEqual([
       "gadget",
@@ -207,7 +207,7 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
   });
 
   it("exits 1 on a target without --db, with nothing run", async () => {
-    const run = await runMigrate(env, ["00"]);
+    const run = await runMigrate(env, ["0000"]);
 
     expect(run.code).toBe(1);
     expect(run.stderr).toContain("a target needs --db <name>");
@@ -226,8 +226,8 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
 
     expect(run).toMatchObject({ code: 0, stderr: "" });
     expect(run.stdout.trim().split("\n")).toEqual([
-      "default: applied 00_0002_create_gadget",
-      "default: applied 01_0001_create_gizmo",
+      "default: applied 0000_0002_create_gadget",
+      "default: applied 0001_0001_create_gizmo",
     ]);
   });
   it("applies each migration once across concurrent processes", async () => {
@@ -236,7 +236,7 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
     expect(runs.map((run) => run.code)).toEqual([0, 0]);
     const lines = runs.flatMap((run) => run.stdout.trim().split("\n"));
     const widgetLines = lines.filter((line) => line.includes("widget"));
-    expect(widgetLines).toEqual(["default: applied 00_0001_create_widget"]);
+    expect(widgetLines).toEqual(["default: applied 0000_0001_create_widget"]);
   });
 });
 
@@ -275,8 +275,8 @@ const runMigrateConfig = (root: string) => {
 describe("the migrate plugin", () => {
   const roots: string[] = [];
   const validFiles = [
-    "app/migrations/default/00_0001_create_widget.ts",
-    "app/migrations/audit/00_0001_create_entry.ts",
+    "app/migrations/default/0000_0001_create_widget.ts",
+    "app/migrations/audit/0000_0001_create_entry.ts",
   ];
 
   afterAll(() => {
@@ -286,19 +286,19 @@ describe("the migrate plugin", () => {
   it.each([
     {
       change: "a directory not in databases",
-      file: "app/migrations/billing/00_0001_create_invoice.ts",
+      file: "app/migrations/billing/0000_0001_create_invoice.ts",
       message: "app/migrations/ entries not in databases: billing",
     },
     {
       change: "a migration above the package.json major",
-      file: "app/migrations/default/02_0001_create_part.ts",
-      message: "migrations above package.json major 1: 02_0001_create_part",
+      file: "app/migrations/default/0002_0001_create_part.ts",
+      message: "migrations above package.json major 1: 0002_0001_create_part",
     },
     {
       change: "a gap in a major",
-      file: "app/migrations/audit/00_0003_create_note.ts",
+      file: "app/migrations/audit/0000_0003_create_note.ts",
       message:
-        "00_0003_create_note breaks the sequence: expected 00_0002 after 00_0001_create_entry",
+        "0000_0003_create_note breaks the sequence: expected 0000_0002 after 0000_0001_create_entry",
     },
     {
       change: "a file that is not a .ts migration",
@@ -330,10 +330,10 @@ describe("the migrate build", () => {
       "migrations must use the db passed to up and down, never @acme/app/db:",
     );
     await expect(building).rejects.toThrow(
-      "app/migrations/default/00_0001_create_player.ts imports @acme/app/db",
+      "app/migrations/default/0000_0001_create_player.ts imports @acme/app/db",
     );
     await expect(building).rejects.toThrow(
-      "app/migrations/default/00_0002_backfill_player.ts imports app/players.ts imports @acme/app/db",
+      "app/migrations/default/0000_0002_backfill_player.ts imports app/players.ts imports @acme/app/db",
     );
   }, 60_000);
 });

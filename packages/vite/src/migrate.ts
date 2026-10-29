@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { checkMigrationNames } from "@acme/shared/rules";
+import { checkMigrationNames, getMigrationMajor } from "@acme/shared/rules";
 import type { EnvironmentOptions, Plugin, Rolldown } from "vite";
 import { isWorkerd, readAppPackage } from "./utils.ts";
 
@@ -16,7 +16,7 @@ const readVisibleEntries = (directory: string) => {
 };
 
 const checkMajors = (names: readonly string[], appMajor: number) => {
-  const newer = names.filter((name) => Number(name.slice(0, 2)) > appMajor);
+  const newer = names.filter((name) => getMigrationMajor(name) > appMajor);
   if (newer.length > 0) {
     const list = newer.join(", ");
     const message = `migrations above package.json major ${appMajor}: ${list}`;
