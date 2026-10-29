@@ -1,12 +1,13 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { checkMigrationNames } from "@acme/shared/rules";
-import type { Plugin } from "vite";
+import type { EnvironmentOptions, Plugin, Rolldown } from "vite";
 import { isWorkerd, readAppPackage } from "./utils.ts";
 
 const migrateEntryId = "virtual:acme/migrate";
 const resolvedMigrateEntryId = `\0${migrateEntryId}`;
 const serverBuildId = "virtual:react-router/server-build";
+const appDbModule = "@acme/app/db";
 
 // Dotfiles are editor and OS litter, never migrations.
 const readVisibleEntries = (directory: string) => {
@@ -85,14 +86,91 @@ const createMigrateEntry = (migrations: DatabaseMigrations) => {
   ].join("\n");
 };
 
+// `towardTarget` maps each module to its next import on the way to the target.
+const getChain = (towardTarget: ReadonlyMap<string, string>, start: string) => {
+  const chain = [start];
+  for (let id = towardTarget.get(start); id; id = towardTarget.get(id)) {
+    chain.push(id);
+  }
+  return chain;
+};
+
+// One walk back through importers, so its cost is independent of how many
+// migrations exist. Breadth-first, so each chain found is the shortest.
+const findImportChains = (
+  context: Rolldown.PluginContext,
+  starts: readonly string[],
+  target: string,
+) => {
+  const towardTarget = new Map<string, string>();
+  const queue = [target];
+  for (const id of queue) {
+    const info = context.getModuleInfo(id);
+    const importers = [
+      ...(info?.importers ?? []),
+      ...(info?.dynamicImporters ?? []),
+    ];
+    for (const importer of importers) {
+      if (importer !== target && !towardTarget.has(importer)) {
+        towardTarget.set(importer, id);
+        queue.push(importer);
+      }
+    }
+  }
+  const reached = starts.filter((start) => towardTarget.has(start));
+  return reached.map((start) => getChain(towardTarget, start));
+};
+
+// getDb() bypasses the migration's transaction, which holds the connection.
+// SQLite then waits forever; Postgres writes outside the rollback.
+const checkMigrationImports = async (
+  context: Rolldown.PluginContext,
+  root: string,
+  migrations: DatabaseMigrations,
+) => {
+  const files = migrations.flatMap(({ directory, names }) => {
+    return names.map((name) => path.join(directory, `${name}.ts`));
+  });
+  const resolved = await context.resolve(appDbModule, files[0]);
+  if (!resolved) return;
+
+  const chains = findImportChains(context, files, resolved.id);
+  if (chains.length > 0) {
+    const lines = chains.map((chain) => {
+      const importers = chain.slice(0, -1).map((id) => path.relative(root, id));
+      return `  ${[...importers, appDbModule].join(" imports ")}`;
+    });
+    const rule = "migrations must use the db passed to up and down";
+    const message = `${rule}, never ${appDbModule}:\n${lines.join("\n")}`;
+    context.error(message);
+  }
+};
+
+const createMigrateOutput = (config: EnvironmentOptions) => {
+  const serverOutput = config.build?.rolldownOptions?.output;
+  const serverFile =
+    !Array.isArray(serverOutput) && serverOutput?.entryFileNames;
+  if (typeof serverFile !== "string") {
+    throw new TypeError("React Router no longer names its server file");
+  }
+
+  // By module id: an app's own chunk could share any name.
+  const entryFileNames = (chunk: { facadeModuleId: string | null }) => {
+    const isMigrate = chunk.facadeModuleId === resolvedMigrateEntryId;
+    return isMigrate ? "migrate.js" : serverFile;
+  };
+  return { entryFileNames };
+};
+
 // A second server entry, so code shared with the app lands in shared chunks.
 export const createMigratePlugin = (databases: readonly string[]): Plugin => {
+  let root = "";
   let migrations: DatabaseMigrations | undefined;
   return {
     name: "acme:migrate",
     apply: "build",
     config: (config) => {
-      const root = path.resolve(config.root ?? "");
+      root = path.resolve(config.root ?? "");
       migrations = readMigrations(root, databases);
       if (!migrations || isWorkerd) return;
 
@@ -106,19 +184,7 @@ export const createMigratePlugin = (databases: readonly string[]): Plugin => {
       handler: (name, config) => {
         if (name !== "ssr" || !migrations || isWorkerd) return;
 
-        const serverOutput = config.build?.rolldownOptions?.output;
-        const serverFile =
-          !Array.isArray(serverOutput) && serverOutput?.entryFileNames;
-        if (typeof serverFile !== "string") {
-          throw new TypeError("React Router no longer names its server file");
-        }
-
-        // By module id: an app's own chunk could share any name.
-        const entryFileNames = (chunk: { facadeModuleId: string | null }) => {
-          const isMigrate = chunk.facadeModuleId === resolvedMigrateEntryId;
-          return isMigrate ? "migrate.js" : serverFile;
-        };
-        const output = { entryFileNames };
+        const output = createMigrateOutput(config);
         return { build: { rolldownOptions: { output } } };
       },
     },
@@ -131,6 +197,11 @@ export const createMigratePlugin = (databases: readonly string[]): Plugin => {
       if (id !== resolvedMigrateEntryId || !migrations) return;
 
       return createMigrateEntry(migrations);
+    },
+    async buildEnd() {
+      if (this.environment.name !== "ssr" || !migrations || isWorkerd) return;
+
+      await checkMigrationImports(this, root, migrations);
     },
   };
 };

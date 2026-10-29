@@ -320,3 +320,20 @@ describe("the migrate plugin", () => {
     expect(runMigrateConfig(root)).toBeUndefined();
   });
 });
+
+describe("the migrate build", () => {
+  it("fails when a migration reaches @acme/app/db", async () => {
+    const root = path.join(fixturePath, "../migration-imports-db");
+    const building = buildApp(root);
+
+    await expect(building).rejects.toThrow(
+      "migrations must use the db passed to up and down, never @acme/app/db:",
+    );
+    await expect(building).rejects.toThrow(
+      "app/migrations/default/00_0001_create_player.ts imports @acme/app/db",
+    );
+    await expect(building).rejects.toThrow(
+      "app/migrations/default/00_0002_backfill_player.ts imports app/players.ts imports @acme/app/db",
+    );
+  }, 60_000);
+});
