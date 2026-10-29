@@ -77,6 +77,9 @@ const createSsrPlugin = (): Plugin => ({
   }),
 });
 
+// Undocumented D1 limit, measured: longer names get API error 7400.
+const maxD1NameLength = 255;
+
 // `<worker>-<name>`, not wrangler's `<worker>-<binding>`: a re-created preview
 // Worker reconnects to its database by name, and `migrate` can find it.
 const createD1Config =
@@ -91,10 +94,19 @@ const createD1Config =
       throw new Error("databases need a Worker name or ACME_WORKER_NAME");
     }
 
-    const d1Databases = names.map((name) => ({
-      binding: `${name.toUpperCase()}_DB`,
-      database_name: `${worker}-${name}`,
-    }));
+    const d1Databases = names.map((name) => {
+      const databaseName = `${worker}-${name}`;
+      if (databaseName.length > maxD1NameLength) {
+        const message = `D1 database "${databaseName}" for Worker "${worker}" is over ${maxD1NameLength} characters`;
+        throw new Error(message);
+      }
+
+      return {
+        binding: `${name.toUpperCase()}_DB`,
+        database_name: databaseName,
+      };
+    });
+
     return { d1_databases: d1Databases };
   };
 

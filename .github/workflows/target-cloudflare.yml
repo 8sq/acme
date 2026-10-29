@@ -309,7 +309,7 @@ jobs:
 
             readarray -t -O "${#ids[@]}" ids < <(jq -r --arg pattern "$pattern" '.result[] | select(.name | test($pattern)) | .uuid' "$response")
 
-            # we're likely on the last page if we have less than 100 results
+            # We're on the last page if we have less than 100 results.
             if [ "$(jq '.result | length' "$response")" -lt 100 ]; then
               break
             fi
