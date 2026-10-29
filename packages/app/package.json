@@ -33,12 +33,23 @@
     "@types/pg": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "better-sqlite3": "catalog:",
     "pg": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "better-sqlite3": "catalog:",
+    "pg": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
   }
 }
