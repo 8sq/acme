@@ -76,7 +76,7 @@ jobs:
         run: >-
           docker run -d --name "$APP-postgres" -p 3001:3000
           --add-host host.docker.internal:host-gateway
-          -e DEFAULT_DATABASE_URL=postgres://postgres@host.docker.internal:5432/postgres
+          -e DEFAULT_DATABASE_URL=postgres://postgres@host.docker.internal:5433/postgres
           "$APP"
 
       - name: Probe container (Postgres)
