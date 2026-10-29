@@ -1,1 +1,1 @@
-export { handleRequest as default, streamTimeout } from "@acme/server";
+export { handleRequest as default, streamTimeout } from "@acme/app/server";

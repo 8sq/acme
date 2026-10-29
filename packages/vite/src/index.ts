@@ -70,7 +70,7 @@ const createSsrPlugin = (): Plugin => ({
       // Bundling breaks better-sqlite3. Node only: the Cloudflare plugin
       // refuses `external`.
       external: isWorkerd ? [] : ["better-sqlite3", "pg"],
-      // Bundled so apps need not depend on what @acme/server imports.
+      // Bundled so apps need not depend on what @acme/app/server imports.
       noExternal: ["isbot"],
     },
   }),
@@ -78,7 +78,7 @@ const createSsrPlugin = (): Plugin => ({
 
 export interface Options {
   /**
-   * Names for `getDb()` from `@acme/db`; none leaves it unused.
+   * Names for `getDb()` from `@acme/app/db`; none leaves it unused.
    */
   databases?: readonly string[];
 }

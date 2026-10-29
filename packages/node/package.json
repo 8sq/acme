@@ -8,26 +8,14 @@
     "./db": "./src/db.ts"
   },
   "dependencies": {
-    "kysely": "catalog:"
+    "better-sqlite3": "catalog:",
+    "kysely": "catalog:",
+    "pg": "catalog:"
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@types/better-sqlite3": "catalog:",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
-    "better-sqlite3": "catalog:",
-    "pg": "catalog:"
-  },
-  "peerDependencies": {
-    "better-sqlite3": "catalog:",
-    "pg": "catalog:"
-  },
-  "peerDependenciesMeta": {
-    "better-sqlite3": {
-      "optional": true
-    },
-    "pg": {
-      "optional": true
-    }
+    "@types/pg": "catalog:"
   }
 }
