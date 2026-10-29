@@ -20,7 +20,7 @@ export const getDbKind: (db: MigrationDb) => "sqlite" | "postgres" | "d1" =
   getRuntimeDbKind;
 
 /**
- * Migrations by name, `XXXX_YYYY_migration_name`, each with `up` and `down`.
+ * Migrations by name, `XX_YYYY_migration_name`, each with `up` and `down`.
  *
  * Never rename one that has run: the database stores its name.
  */
@@ -28,10 +28,10 @@ export type Migrations = Record<string, Required<Migration>>;
 
 const getTargetName = (names: readonly string[], target: string) => {
   if (target === "none") return NO_MIGRATIONS;
-  if (/^\d{4}$/u.test(target)) {
+  if (/^\d{2}$/u.test(target)) {
     return names.findLast((name) => name.startsWith(`${target}_`));
   }
-  if (/^\d{4}_\d{4}$/u.test(target)) {
+  if (/^\d{2}_\d{4}$/u.test(target)) {
     return names.find((name) => name.startsWith(`${target}_`));
   }
   return names.find((name) => name === target);
@@ -114,8 +114,8 @@ const parseMigrateArgs = (args: readonly string[]) => {
  *
  * Stops at the first failing database, leaving earlier ones migrated.
  *
- * @param args `[<target>] [--db <name>]`. A target is a name, `XXXX_YYYY`,
- * `XXXX` or `none`.
+ * @param args `[<target>] [--db <name>]`. A target is a name, `XX_YYYY`,
+ * `XX` or `none`.
  */
 export const migrate = async (
   migrationsByDatabase: Record<string, Migrations>,

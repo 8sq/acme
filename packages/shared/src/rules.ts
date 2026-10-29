@@ -1,19 +1,19 @@
 // Fixed widths: Kysely sorts pending migrations as strings, not numbers.
-const namePattern = /^(\d{4})_(\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*$/u;
+const namePattern = /^(\d{2})_(\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*$/u;
 
 const getMajorPrefix = (name: string) => {
-  return name.slice(0, 4);
+  return name.slice(0, 2);
 };
 
 /**
- * The major of a `XXXX_YYYY_migration_name`, as a number.
+ * The major of a `XX_YYYY_migration_name`, as a number.
  */
 export const getMigrationMajor = (name: string) => {
   return Number(getMajorPrefix(name));
 };
 
 const getSequence = (name: string) => {
-  return Number(name.slice(5, 9));
+  return Number(name.slice(3, 7));
 };
 
 // `previous` is the name before this one in its major, if any.
@@ -38,7 +38,7 @@ const getSequenceProblem = (name: string, previous: string | undefined) => {
 };
 
 /**
- * Throws, listing every problem, unless all are `XXXX_YYYY_migration_name`.
+ * Throws, listing every problem, unless all are `XX_YYYY_migration_name`.
  *
  * Names use lower case letters, digits and `_`. Within each major, sequences
  * run from `0001` with no gap or duplicate.
@@ -48,7 +48,7 @@ export const checkMigrationNames = (names: readonly string[]) => {
   const validNames = names.filter((name) => namePattern.test(name));
   const sortedNames = validNames.toSorted();
   const problems = invalidNames.map((name) => {
-    return `"${name}" is not XXXX_YYYY_migration_name`;
+    return `"${name}" is not XX_YYYY_migration_name`;
   });
 
   for (const [index, name] of sortedNames.entries()) {

@@ -35,13 +35,13 @@ const brokenMigration: Migrations[string] = {
 };
 
 const defaultMigrations: Migrations = {
-  "0000_0001_widget": createTableMigration("widget"),
-  "0000_0002_gadget": createTableMigration("gadget"),
-  "0001_0001_gizmo": createTableMigration("gizmo"),
+  "00_0001_widget": createTableMigration("widget"),
+  "00_0002_gadget": createTableMigration("gadget"),
+  "01_0001_gizmo": createTableMigration("gizmo"),
 };
 
 const auditMigrations: Migrations = {
-  "0000_0001_entry": createTableMigration("entry"),
+  "00_0001_entry": createTableMigration("entry"),
 };
 
 const migrations = { default: defaultMigrations, audit: auditMigrations };
@@ -91,24 +91,24 @@ describe("migrate", () => {
   it.each([
     {
       from: "none",
-      target: "0001_0001_gizmo",
+      target: "01_0001_gizmo",
       tables: ["gadget", "gizmo", "widget"],
     },
-    { from: "0001", target: "0000_0001_widget", tables: ["widget"] },
+    { from: "01", target: "00_0001_widget", tables: ["widget"] },
     {
-      from: "0000_0001_widget",
-      target: "0000_0002",
+      from: "00_0001_widget",
+      target: "00_0002",
       tables: ["gadget", "widget"],
     },
-    { from: "0001", target: "0000_0002", tables: ["gadget", "widget"] },
-    { from: "none", target: "0000", tables: ["gadget", "widget"] },
-    { from: "0001", target: "0000", tables: ["gadget", "widget"] },
+    { from: "01", target: "00_0002", tables: ["gadget", "widget"] },
+    { from: "none", target: "00", tables: ["gadget", "widget"] },
+    { from: "01", target: "00", tables: ["gadget", "widget"] },
     {
-      from: "0000_0001_widget",
-      target: "0001",
+      from: "00_0001_widget",
+      target: "01",
       tables: ["gadget", "gizmo", "widget"],
     },
-    { from: "0001", target: "none", tables: [] },
+    { from: "01", target: "none", tables: [] },
   ])("moves from $from to $target", async ({ from, target, tables }) => {
     await migrate(migrations, [from, "--db", "default"]);
     await migrate(migrations, [target, "--db", "default"]);
@@ -117,28 +117,28 @@ describe("migrate", () => {
   });
 
   it("stops at a failing database, keeping earlier ones migrated", async () => {
-    const auditBroken = { "0000_0001_broken": brokenMigration };
+    const auditBroken = { "00_0001_broken": brokenMigration };
     const withBrokenAudit = { ...migrations, audit: auditBroken };
     const running = migrate(withBrokenAudit, []);
 
     await expect(running).rejects.toThrow(
-      'database "audit": migration failed at 0000_0001_broken',
+      'database "audit": migration failed at 00_0001_broken',
     );
     expect(await getTables("default")).toEqual(["gadget", "gizmo", "widget"]);
   });
 
   it.each([
-    { args: ["0000"], message: "a target needs --db <name>" },
+    { args: ["00"], message: "a target needs --db <name>" },
     {
-      args: ["0000_0003", "--db", "default"],
+      args: ["00_0003", "--db", "default"],
       message: 'database "default": unknown target',
     },
     {
-      args: ["0002", "--db", "default"],
+      args: ["02", "--db", "default"],
       message: 'database "default": unknown target',
     },
     { args: ["--db", "nope"], message: "not in @acme/vite's databases: nope" },
-    { args: ["0000", "0001"], message: "usage: migrate.js" },
+    { args: ["00", "01"], message: "usage: migrate.js" },
   ])("refuses $args with nothing run", async ({ args, message }) => {
     await expect(migrate(migrations, args)).rejects.toThrow(message);
 
@@ -147,21 +147,21 @@ describe("migrate", () => {
 
   it("refuses a migration without down before migrating any", async () => {
     const { down: _down, ...entry } = createTableMigration("entry");
-    const downless = { "0000_0001_entry": entry } as unknown as Migrations;
+    const downless = { "00_0001_entry": entry } as unknown as Migrations;
     const running = migrate({ ...migrations, audit: downless }, []);
 
     await expect(running).rejects.toThrow(
-      'database "audit": no down in 0000_0001_entry',
+      'database "audit": no down in 00_0001_entry',
     );
     expect(await getTables("default")).toEqual([]);
   });
 
   it("refuses invalid names before migrating any database", async () => {
-    const badAudit = { "0000_0002_entry": createTableMigration("entry") };
+    const badAudit = { "00_0002_entry": createTableMigration("entry") };
     const running = migrate({ ...migrations, audit: badAudit }, []);
 
     await expect(running).rejects.toThrow(
-      "0000_0002_entry breaks the sequence: major 0000 starts at 0000_0001",
+      "00_0002_entry breaks the sequence: major 00 starts at 00_0001",
     );
     expect(await getTables("default")).toEqual([]);
   });
@@ -191,7 +191,7 @@ describe("migrate", () => {
   });
 
   it("releases its lock after a failure", async () => {
-    const broken = { ...auditMigrations, "0000_0002_broken": brokenMigration };
+    const broken = { ...auditMigrations, "00_0002_broken": brokenMigration };
     const failing = migrate({ audit: broken }, ["--db", "audit"]);
     await expect(failing).rejects.toThrow("migration failed");
 
@@ -201,7 +201,7 @@ describe("migrate", () => {
   });
 
   it.runIf(!isD1)("leaves the schema untouched when one fails", async () => {
-    const broken = { ...auditMigrations, "0000_0002_broken": brokenMigration };
+    const broken = { ...auditMigrations, "00_0002_broken": brokenMigration };
     const failing = migrate({ audit: broken }, ["--db", "audit"]);
     await expect(failing).rejects.toThrow("migration failed");
 
@@ -209,7 +209,7 @@ describe("migrate", () => {
   });
 
   it.runIf(isD1)("keeps what ran before a failure on D1", async () => {
-    const broken = { ...auditMigrations, "0000_0002_broken": brokenMigration };
+    const broken = { ...auditMigrations, "00_0002_broken": brokenMigration };
     const failing = migrate({ audit: broken }, ["--db", "audit"]);
     await expect(failing).rejects.toThrow("migration failed");
 
@@ -227,7 +227,7 @@ describe("migration exports", () => {
       await sql`create table widget (id integer primary key)`.execute(db);
     };
     const down = () => Promise.resolve();
-    await migrate({ default: { "0000_0001_widget": { up, down } } }, []);
+    await migrate({ default: { "00_0001_widget": { up, down } } }, []);
 
     expect(kinds).toEqual([database]);
     expect(await getTables("default")).toEqual(["widget"]);
