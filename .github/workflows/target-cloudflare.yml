@@ -164,6 +164,7 @@ jobs:
         env:
           APP: ${{ inputs.app }}
           APP_REVISION: ${{ env.HEAD_SHA }}
+          ACME_WORKER_NAME: ${{ needs.checks.outputs.scoped-slug }}
         run: pnpm --filter "@acme/$APP..." run build:workerd
 
       # Probed on every run, so forks (no token, no deploy) are probed too.
@@ -276,6 +277,54 @@ jobs:
         with:
           install-args: --ignore-scripts
           cache: false
+
+      # Not by bindings: removing a name from `databases` unbinds its database.
+      # A shared database bound by hand is not the preview's to delete.
+      - name: Delete databases
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER: ${{ needs.checks.outputs.scoped-slug }}
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          response="$RUNNER_TEMP/response.json"
+          call() {
+            curl --silent --show-error \
+              --output "$response" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$@"
+          }
+
+          # `databases` names have no "-", so the pattern skips ygoma-feat-x-*.
+          pattern="^$WORKER-[a-z][a-z0-9_]*\$"
+          ids=()
+          page=1
+          while :; do
+            status=$(call "$api/d1/database?per_page=100&page=$page")
+            if [ "$status" != "200" ]; then
+              cat "$response"
+              exit 1
+            fi
+
+            readarray -t -O "${#ids[@]}" ids < <(jq -r --arg pattern "$pattern" '.result[] | select(.name | test($pattern)) | .uuid' "$response")
+
+            # We're on the last page if we have less than 100 results.
+            if [ "$(jq '.result | length' "$response")" -lt 100 ]; then
+              break
+            fi
+
+            page=$((page + 1))
+          done
+
+          for id in "${ids[@]}"; do
+            status=$(call --request DELETE "$api/d1/database/$id")
+            case "$status" in
+              200) echo "Deleted D1 database $id." ;;
+              404) echo "::notice::D1 database $id was already gone." ;;
+              *) cat "$response" && exit 1 ;;
+            esac
+          done
 
       - name: Delete
         working-directory: apps/${{ inputs.app }}
