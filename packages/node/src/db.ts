@@ -75,7 +75,16 @@ const createPostgresDialect = (url: string, variable: string) => {
     pool: async () => {
       const pg = await importDriver(() => import("pg"), "pg", variable);
       // Idle clients would hold the event loop open for their 10s idle timeout.
-      return new pg.Pool({ connectionString: url, allowExitOnIdle: true });
+      const pool = new pg.Pool({
+        connectionString: url,
+        allowExitOnIdle: true,
+      });
+      // Without a listener, an idle client's error event kills the process.
+      // pg has already removed that client, so logging is all that is left.
+      pool.on("error", (error) => {
+        console.error(`${variable}: idle connection failed`, error);
+      });
+      return pool;
     },
   });
 };

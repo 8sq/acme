@@ -3,6 +3,8 @@ import { get, type IncomingMessage } from "node:http";
 import { createInterface } from "node:readline";
 import { text } from "node:stream/consumers";
 import { fileURLToPath } from "node:url";
+import { type Kysely, sql } from "kysely";
+import { Client } from "pg";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const postgresUrl = process.env.ACME_TEST_POSTGRES_URL;
@@ -50,6 +52,22 @@ const shutDownMidRequest = async (databaseUrls: Record<string, string>) => {
   return { body, closed: closed.toSorted(), code, shutdownMs };
 };
 
+const selectBackendPid = async (db: Kysely<unknown>) => {
+  const query = sql<{ pid: number }>`select pg_backend_pid() as pid`;
+  const { rows } = await query.execute(db);
+  return rows[0]?.pid;
+};
+
+const terminateBackend = async (url: string, pid: number | undefined) => {
+  const client = new Client(url);
+  await client.connect();
+  try {
+    await client.query("select pg_terminate_backend($1)", [pid]);
+  } finally {
+    await client.end();
+  }
+};
+
 // Opened databases are module state: each test gets a fresh module.
 const importDb = () => {
   return import("./db.ts");
@@ -93,6 +111,31 @@ describe("getDb", () => {
     expect(() => getDb("missing")).toThrow("MISSING_DATABASE_URL is not set");
     expect(process.listenerCount("beforeExit")).toBe(listenersBefore);
   });
+
+  it.runIf(postgresUrl)(
+    "keeps serving after an idle connection drops",
+    async () => {
+      const { getDb } = await importDb();
+      process.env.DROPPED_DATABASE_URL = postgresUrl;
+      const db = getDb("dropped");
+      const logging = new Promise((resolve) => {
+        vi.spyOn(console, "error").mockImplementation(resolve);
+      });
+
+      try {
+        const pid = await selectBackendPid(db);
+        await terminateBackend(postgresUrl ?? "", pid);
+        const logged = await logging;
+        const nextPid = await selectBackendPid(db);
+
+        expect(logged).toBe("DROPPED_DATABASE_URL: idle connection failed");
+        expect(nextPid).not.toBe(pid);
+      } finally {
+        vi.restoreAllMocks();
+        await db.destroy();
+      }
+    },
+  );
 
   it.each(shutdownCases)(
     "closes $name after the last request on SIGTERM",
