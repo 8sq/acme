@@ -30,7 +30,6 @@ runs:
   steps:
     - name: Start container
       id: start
-      if: "!cancelled()"
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}

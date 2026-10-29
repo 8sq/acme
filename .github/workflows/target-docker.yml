@@ -60,6 +60,7 @@ jobs:
           container: ${{ env.APP }}-sqlite
           port: 3000
           sha: ${{ env.HEAD_SHA }}
+          run-args: -e DEFAULT_DATABASE_URL=sqlite:/nonexistent/ygoma.db
 
       # Runs after a SQLite failure too, so each database reports on its own.
       - name: Probe image (Postgres)
