@@ -2,6 +2,8 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
   "labels": ["dependencies"],
+  "schedule": ["before 6am on tuesday"],
+  "prHourlyLimit": 0,
   "rangeStrategy": "bump",
   "minimumReleaseAge": "2 days",
   "platformAutomerge": false,
