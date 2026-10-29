@@ -268,6 +268,12 @@ importers:
       '@react-router/serve':
         specifier: 'catalog:'
         version: 8.5.0(react-router@8.5.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(supports-color@10.2.2)(typescript@7.0.2)
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 13.0.3
+      pg:
+        specifier: 'catalog:'
+        version: 8.23.1
       react:
         specifier: 'catalog:'
         version: 19.3.1

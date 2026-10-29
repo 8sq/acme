@@ -29,6 +29,20 @@ jobs:
     timeout-minutes: 15
     env:
       APP: ${{ inputs.app }}
+    services:
+      postgres:
+        image: postgres:18.6-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        # Data in RAM: the job throws the server away.
+        options: >-
+          --tmpfs /var/lib/postgresql
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,18 +50,27 @@ jobs:
           persist-credentials: false
 
       - name: Build image
+        id: build
         run: docker build -f "apps/$APP/Dockerfile" --build-arg "APP_REVISION=$HEAD_SHA" -t "$APP" .
 
-      - name: Start container
-        run: docker run -d --name "$APP" -p 3000:3000 "$APP"
-
-      - name: Probe container
-        uses: $/.github/actions/probe
+      - name: Probe image (SQLite)
+        uses: $/.github/actions/probe-docker
         with:
-          url: http://localhost:3000
+          image: ${{ env.APP }}
+          container: ${{ env.APP }}-sqlite
+          port: 3000
           sha: ${{ env.HEAD_SHA }}
-          timeout-seconds: 30
 
-      - name: Show container logs
-        if: failure()
-        run: docker logs "$APP"
+      # Runs after a SQLite failure too, so each database reports on its own.
+      - name: Probe image (Postgres)
+        if: "!cancelled() && steps.build.outcome == 'success'"
+        uses: $/.github/actions/probe-docker
+        with:
+          image: ${{ env.APP }}
+          container: ${{ env.APP }}-postgres
+          port: 3001
+          sha: ${{ env.HEAD_SHA }}
+          # Job services listen on the runner, not on the container's localhost.
+          run-args: >-
+            --add-host host.docker.internal:host-gateway
+            -e DEFAULT_DATABASE_URL=postgres://postgres@host.docker.internal:5432/postgres

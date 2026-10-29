@@ -16,6 +16,8 @@
   "dependencies": {
     "@acme/app": "workspace:*",
     "@react-router/serve": "catalog:",
+    "better-sqlite3": "catalog:",
+    "pg": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "catalog:"
