@@ -164,6 +164,7 @@ jobs:
         env:
           APP: ${{ inputs.app }}
           APP_REVISION: ${{ env.HEAD_SHA }}
+          ACME_WORKER_NAME: ${{ needs.checks.outputs.scoped-slug }}
         run: pnpm --filter "@acme/$APP..." run build:workerd
 
       # Probed on every run, so forks (no token, no deploy) are probed too.
@@ -276,6 +277,44 @@ jobs:
         with:
           install-args: --ignore-scripts
           cache: false
+
+      # Before the Worker delete: its bindings are how the databases are found.
+      # By id, not name prefix: ygoma-feat-* would also match ygoma-feat-x-*.
+      - name: Delete databases
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER: ${{ needs.checks.outputs.scoped-slug }}
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          response="$RUNNER_TEMP/response.json"
+          call() {
+            curl --silent --show-error \
+              --output "$response" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$@"
+          }
+
+          status=$(call "$api/workers/scripts/$WORKER/settings")
+          if [ "$status" = "404" ]; then
+            echo "::notice::$WORKER was already gone, and its databases with it."
+            exit 0
+          fi
+          if [ "$status" != "200" ]; then
+            cat "$response"
+            exit 1
+          fi
+
+          ids=$(jq -r '.result.bindings[] | select(.type == "d1") | .id' "$response")
+          for id in $ids; do
+            status=$(call --request DELETE "$api/d1/database/$id")
+            case "$status" in
+              200) echo "Deleted D1 database $id." ;;
+              404) echo "::notice::D1 database $id was already gone." ;;
+              *) cat "$response" && exit 1 ;;
+            esac
+          done
 
       - name: Delete
         working-directory: apps/${{ inputs.app }}
