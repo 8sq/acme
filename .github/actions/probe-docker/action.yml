@@ -1,0 +1,88 @@
+name: Probe Docker
+description: Run an image, probe it, wait until healthy, then require a clean exit on SIGTERM.
+
+inputs:
+  image:
+    description: Image to run.
+    required: true
+  container:
+    description: Container name, unique within the job.
+    required: true
+  port:
+    description: Host port mapped to target-port.
+    required: true
+  target-port:
+    description: Port the container listens on.
+    required: false
+    default: "3000"
+  sha:
+    description: Commit the image was stamped with, passed to the probe.
+    required: true
+  run-args:
+    description: Extra arguments for docker run, split on whitespace.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Start container
+      id: start
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        CONTAINER: ${{ inputs.container }}
+        PORT: ${{ inputs.port }}
+        TARGET_PORT: ${{ inputs.target-port }}
+        RUN_ARGS: ${{ inputs.run-args }}
+      # read stops at the first newline, so newlines become spaces first.
+      run: |
+        read -ra docker_args <<< "${RUN_ARGS//$'\n'/ }"
+        docker run -d --name "$CONTAINER" -p "$PORT:$TARGET_PORT" \
+          "${docker_args[@]}" "$IMAGE"
+
+    - name: Probe container
+      uses: $/.github/actions/probe
+      with:
+        url: http://localhost:${{ inputs.port }}
+        sha: ${{ inputs.sha }}
+        timeout-seconds: 30
+
+    # 60s: a failing check turns unhealthy after its start period and retries.
+    - name: Wait until healthy
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container }}
+      run: |
+        format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+        deadline=$((SECONDS + 60))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+          health=$(docker inspect -f "$format" "$CONTAINER")
+          case $health in
+            healthy) exit 0 ;;
+            unhealthy | none) break ;;
+          esac
+          sleep 1
+        done
+        echo "::error::$CONTAINER health is ${health:-unknown}, expected healthy."
+        exit 1
+
+    - name: Stop container
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container }}
+      run: |
+        docker stop -t 3 "$CONTAINER" > /dev/null
+        code=$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER")
+        if [ "$code" != 0 ]; then
+          # 137 is SIGKILL: no exit within docker stop's 3s grace period.
+          echo "::error::$CONTAINER exited $code on SIGTERM, expected 0."
+          exit 1
+        fi
+
+    - name: Show container logs
+      if: failure() && steps.start.outcome == 'success'
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container }}
+      run: docker logs "$CONTAINER"
