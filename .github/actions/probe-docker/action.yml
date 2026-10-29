@@ -1,0 +1,79 @@
+name: Probe Docker
+description: Run an image, probe it, then require a clean stop on SIGTERM.
+
+inputs:
+  image:
+    description: Image to run.
+    required: true
+  container:
+    description: Container name, unique within the job.
+    required: true
+  port:
+    description: Host port mapped to target-port.
+    required: true
+  target-port:
+    description: Port the container listens on.
+    required: false
+    default: "3000"
+  sha:
+    description: Commit the image was stamped with, passed to the probe.
+    required: true
+  run-args:
+    description: Extra arguments for docker run, split on whitespace.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  # Explicit outcomes: the docs leave unclear whether failure() sees the job's
+  # steps, which would skip the Postgres run after a SQLite failure.
+  steps:
+    - name: Start container
+      id: start
+      if: "!cancelled()"
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        CONTAINER: ${{ inputs.container }}
+        PORT: ${{ inputs.port }}
+        TARGET_PORT: ${{ inputs.target-port }}
+        RUN_ARGS: ${{ inputs.run-args }}
+      # read stops at the first newline, so newlines become spaces first.
+      run: |
+        read -ra docker_args <<< "${RUN_ARGS//$'\n'/ }"
+        docker run -d --name "$CONTAINER" -p "$PORT:$TARGET_PORT" \
+          "${docker_args[@]}" "$IMAGE"
+
+    - name: Probe container
+      id: probe
+      if: "!cancelled() && steps.start.outcome == 'success'"
+      uses: $/.github/actions/probe
+      with:
+        url: http://localhost:${{ inputs.port }}
+        sha: ${{ inputs.sha }}
+        timeout-seconds: 30
+
+    - name: Stop container
+      id: stop
+      if: "!cancelled() && steps.probe.outcome == 'success'"
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container }}
+      run: |
+        started=$SECONDS
+        docker stop -t 10 "$CONTAINER" > /dev/null
+        took=$((SECONDS - started))
+        code=$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER")
+        if [ "$code" != 0 ]; then
+          # 137 is SIGKILL: docker stop gave up after the 10s grace period.
+          echo "::error::$CONTAINER exited $code after ${took}s instead of stopping on SIGTERM."
+          exit 1
+        fi
+        echo "::notice::$CONTAINER stopped cleanly in ${took}s."
+
+    - name: Show container logs
+      if: "!cancelled() && (steps.probe.outcome == 'failure' || steps.stop.outcome == 'failure')"
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container }}
+      run: docker logs "$CONTAINER"

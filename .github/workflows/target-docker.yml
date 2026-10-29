@@ -53,41 +53,24 @@ jobs:
         id: build
         run: docker build -f "apps/$APP/Dockerfile" --build-arg "APP_REVISION=$HEAD_SHA" -t "$APP" .
 
-      - name: Start container (SQLite)
-        id: sqlite-start
-        run: docker run -d --name "$APP-sqlite" -p 3000:3000 "$APP"
-
-      - name: Probe container (SQLite)
-        uses: $/.github/actions/probe
+      - name: Probe image (SQLite)
+        uses: $/.github/actions/probe-docker
         with:
-          url: http://localhost:3000
+          image: ${{ env.APP }}
+          container: ${{ env.APP }}-sqlite
+          port: 3000
           sha: ${{ env.HEAD_SHA }}
-          timeout-seconds: 30
-
-      - name: Show container logs (SQLite)
-        if: failure() && steps.sqlite-start.outcome == 'success'
-        run: docker logs "$APP-sqlite"
 
       # Runs after a SQLite failure too, so each database reports on its own.
-      - name: Start container (Postgres)
-        id: postgres-start
+      - name: Probe image (Postgres)
         if: "!cancelled() && steps.build.outcome == 'success'"
-        # The service listens on the runner, not on the container's localhost.
-        run: >-
-          docker run -d --name "$APP-postgres" -p 3001:3000
-          --add-host host.docker.internal:host-gateway
-          -e DEFAULT_DATABASE_URL=postgres://postgres@host.docker.internal:5432/postgres
-          "$APP"
-
-      - name: Probe container (Postgres)
-        id: postgres-probe
-        if: "!cancelled() && steps.postgres-start.outcome == 'success'"
-        uses: $/.github/actions/probe
+        uses: $/.github/actions/probe-docker
         with:
-          url: http://localhost:3001
+          image: ${{ env.APP }}
+          container: ${{ env.APP }}-postgres
+          port: 3001
           sha: ${{ env.HEAD_SHA }}
-          timeout-seconds: 30
-
-      - name: Show container logs (Postgres)
-        if: "!cancelled() && steps.postgres-probe.outcome == 'failure'"
-        run: docker logs "$APP-postgres"
+          # Job services listen on the runner, not on the container's localhost.
+          run-args: >-
+            --add-host host.docker.internal:host-gateway
+            -e DEFAULT_DATABASE_URL=postgres://postgres@host.docker.internal:5432/postgres
