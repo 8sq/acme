@@ -278,8 +278,8 @@ jobs:
           install-args: --ignore-scripts
           cache: false
 
-      # Before the Worker delete: its bindings are how the databases are found.
-      # By id, not name prefix: ygoma-feat-* would also match ygoma-feat-x-*.
+      # Not by bindings: removing a name from `databases` unbinds its database.
+      # A shared database bound by hand is not the preview's to delete.
       - name: Delete databases
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -296,18 +296,28 @@ jobs:
               "$@"
           }
 
-          status=$(call "$api/workers/scripts/$WORKER/settings")
-          if [ "$status" = "404" ]; then
-            echo "::notice::$WORKER was already gone, and its databases with it."
-            exit 0
-          fi
-          if [ "$status" != "200" ]; then
-            cat "$response"
-            exit 1
-          fi
+          # `databases` names have no "-", so the pattern skips ygoma-feat-x-*.
+          pattern="^$WORKER-[a-z][a-z0-9_]*\$"
+          ids=()
+          page=1
+          while :; do
+            status=$(call "$api/d1/database?per_page=100&page=$page")
+            if [ "$status" != "200" ]; then
+              cat "$response"
+              exit 1
+            fi
 
-          ids=$(jq -r '.result.bindings[] | select(.type == "d1") | .id' "$response")
-          for id in $ids; do
+            readarray -t -O "${#ids[@]}" ids < <(jq -r --arg pattern "$pattern" '.result[] | select(.name | test($pattern)) | .uuid' "$response")
+
+            # we're likely on the last page if we have less than 100 results
+            if [ "$(jq '.result | length' "$response")" -lt 100 ]; then
+              break
+            fi
+
+            page=$((page + 1))
+          done
+
+          for id in "${ids[@]}"; do
             status=$(call --request DELETE "$api/d1/database/$id")
             case "$status" in
               200) echo "Deleted D1 database $id." ;;

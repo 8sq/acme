@@ -41,6 +41,7 @@ const createIdentityPlugin = (): Plugin => ({
 });
 
 // Uppercased into `<NAME>_DB` and `<NAME>_DATABASE_URL`.
+// No "-": CI deletes preview databases by matching `<worker>-<name>`.
 const databaseNamePattern = /^[a-z][a-z0-9_]*$/u;
 
 const checkDatabaseNames = (names: readonly string[]) => {
