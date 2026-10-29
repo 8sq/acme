@@ -53,22 +53,13 @@ runs:
       env:
         CONTAINER: ${{ inputs.container }}
       run: |
-        grace=10
-        started=$(date +%s%N)
-        docker stop -t "$grace" "$CONTAINER" > /dev/null
-        took_ms=$((($(date +%s%N) - started) / 1000000))
+        docker stop -t 3 "$CONTAINER" > /dev/null
         code=$(docker inspect -f '{{.State.ExitCode}}' "$CONTAINER")
         if [ "$code" != 0 ]; then
-          # 137 is SIGKILL: docker stop gave up after the grace period.
-          echo "::error::$CONTAINER exited $code after ${took_ms}ms instead of stopping on SIGTERM."
+          # 137 is SIGKILL: no exit within docker stop's 3s grace period.
+          echo "::error::$CONTAINER exited $code on SIGTERM, expected 0."
           exit 1
         fi
-        # Exit 0 this close to SIGKILL is luck: a slower runner gets killed.
-        if [ "$took_ms" -ge $((grace * 900)) ]; then
-          echo "::error::$CONTAINER took ${took_ms}ms of its ${grace}s grace period to stop."
-          exit 1
-        fi
-        echo "::notice::$CONTAINER stopped cleanly in ${took_ms}ms."
 
     - name: Show container logs
       if: failure() && steps.start.outcome == 'success'
