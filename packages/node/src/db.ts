@@ -1,12 +1,15 @@
 // oxlint-disable max-classes-per-file -- Kysely extends by subclassing
 import {
-  type CompiledQuery,
+  CompiledQuery,
+  type DatabaseConnection,
   Kysely,
   PostgresDialect,
   PostgresIntrospector,
   type QueryResult,
   SqliteAdapter,
   SqliteDialect,
+  type SqliteDialectConfig,
+  SqliteDriver,
   SqliteIntrospector,
   sql,
 } from "kysely";
@@ -49,7 +52,27 @@ class TransactionalSqliteAdapter extends SqliteAdapter {
   }
 }
 
+// IMMEDIATE takes the write lock before the first read, so a second migrator
+// process waits for the first instead of reading the state it is changing.
+class ImmediateSqliteDriver extends SqliteDriver {
+  // oxlint-disable-next-line class-methods-use-this
+  public override async beginTransaction(connection: DatabaseConnection) {
+    await connection.executeQuery(CompiledQuery.raw("begin immediate"));
+  }
+}
+
 class TransactionalSqliteDialect extends SqliteDialect {
+  readonly #config: SqliteDialectConfig;
+
+  public constructor(config: SqliteDialectConfig) {
+    super(config);
+    this.#config = config;
+  }
+
+  public override createDriver() {
+    return new ImmediateSqliteDriver(this.#config);
+  }
+
   // oxlint-disable-next-line class-methods-use-this
   public override createAdapter() {
     return new TransactionalSqliteAdapter();
@@ -201,6 +224,15 @@ export const getDb = (name: string) => {
   }
 
   return instance;
+};
+
+/**
+ * Destroys every Kysely from `getDb()`, so the process can exit.
+ */
+export const closeDbs = async () => {
+  const closing = [...instances.values()].map((instance) => instance.destroy());
+  instances.clear();
+  await Promise.all(closing);
 };
 
 /**
