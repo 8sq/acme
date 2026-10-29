@@ -1,35 +1,48 @@
 {
-  "name": "@acme/db",
+  "name": "@acme/app",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "imports": {
     "#runtime": {
+      "workerd": "@acme/workerd",
+      "default": "@acme/node"
+    },
+    "#runtime/db": {
       "workerd": "@acme/workerd/db",
       "default": "@acme/node/db"
     }
   },
   "exports": {
-    ".": "./src/index.server.ts",
-    "./migrate": "./src/migrate.server.ts"
+    "./server": "./src/server/index.server.ts",
+    "./router": "./src/router/index.ts",
+    "./db": "./src/db/index.server.ts",
+    "./migrate": "./src/db/migrate.server.ts"
   },
   "dependencies": {
     "@acme/node": "workspace:*",
-    "@acme/server": "workspace:*",
+    "isbot": "catalog:",
     "kysely": "catalog:"
   },
   "devDependencies": {
     "@acme/tsconfig": "workspace:*",
     "@acme/workerd": "workspace:*",
     "@cloudflare/vitest-plugin": "catalog:",
+    "@react-router/dev": "catalog:",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "better-sqlite3": "catalog:",
     "pg": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
     "better-sqlite3": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router": "catalog:"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {

@@ -4,7 +4,7 @@ import {
   type TestProjectInlineConfiguration,
 } from "vitest/config";
 
-const include = ["src/**/*.test.ts"];
+const include = ["src/db/**/*.test.ts"];
 // What @acme/vite stamps in an app.
 const define = { __ACME_DATABASES__: JSON.stringify(["default", "audit"]) };
 const postgresUrl = process.env.ACME_TEST_POSTGRES_URL;
@@ -28,6 +28,7 @@ const postgres: TestProjectInlineConfiguration[] = postgresUrl
 export default defineConfig({
   test: {
     projects: [
+      { test: { name: "node", include: ["src/server/**/*.test.ts"] } },
       {
         define,
         test: {

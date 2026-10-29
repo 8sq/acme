@@ -10,7 +10,7 @@ const acmeRoutes: RouteConfigEntry[] = [
   {
     id: "acme/health",
     path: "_health",
-    file: getRouteFile("./routes/health.ts"),
+    file: getRouteFile("../server/routes/health.ts"),
   },
 ];
 

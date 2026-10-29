@@ -1,4 +1,4 @@
-import { getHealth } from "@acme/server";
+import { getHealth } from "../health.ts";
 import type { LoaderFunctionArgs } from "react-router";
 
 // Always 200: a liveness probe must not kill a degraded app; CI reads `status`.

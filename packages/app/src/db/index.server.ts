@@ -10,11 +10,11 @@ import {
   batch as runBatch,
   getDb as getRuntimeDb,
   readAll as runReadAll,
-} from "#runtime";
-import { addHealthCheck } from "@acme/server";
+} from "#runtime/db";
+import { addHealthCheck } from "../server/health.ts";
 
 /**
- * Schemas by database name, filled with `declare module "@acme/db"`.
+ * Schemas by database name, filled with `declare module "@acme/app/db"`.
  */
 // oxlint-disable-next-line no-empty-object-type
 export interface Databases {}
