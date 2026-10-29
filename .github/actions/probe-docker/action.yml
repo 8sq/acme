@@ -1,5 +1,5 @@
 name: Probe Docker
-description: Run an image, probe it, then require a clean exit on SIGTERM.
+description: Run an image, probe it, wait until healthy, then require a clean exit on SIGTERM.
 
 inputs:
   image:
@@ -47,6 +47,25 @@ runs:
         url: http://localhost:${{ inputs.port }}
         sha: ${{ inputs.sha }}
         timeout-seconds: 30
+
+    # 60s: a failing check turns unhealthy after its start period and retries.
+    - name: Wait until healthy
+      shell: bash
+      env:
+        CONTAINER: ${{ inputs.container }}
+      run: |
+        format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+        deadline=$((SECONDS + 60))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+          health=$(docker inspect -f "$format" "$CONTAINER")
+          case $health in
+            healthy) exit 0 ;;
+            unhealthy | none) break ;;
+          esac
+          sleep 1
+        done
+        echo "::error::$CONTAINER health is ${health:-unknown}, expected healthy."
+        exit 1
 
     - name: Stop container
       shell: bash

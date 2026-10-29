@@ -28,4 +28,8 @@ RUN mkdir /var/lib/ygoma && chown node:node /var/lib/ygoma
 VOLUME /var/lib/ygoma
 USER node
 EXPOSE 3000
+# Through node: the slim image has neither curl nor wget.
+# Plain /_health, not ?full: liveness must not mark a degraded app unhealthy.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --start-interval=1s \
+  CMD ["node", "-e", "fetch(`http://localhost:${process.env.PORT}/_health`).then((response) => process.exit(response.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node_modules/.bin/react-router-serve", "build/server/index.js"]
