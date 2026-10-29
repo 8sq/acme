@@ -1,6 +1,23 @@
+import type { Kysely } from "kysely";
 import { type Migration, Migrator, NO_MIGRATIONS } from "kysely/migration";
-import { getDb } from "#runtime/db";
+import { getDb, getDbKind as getRuntimeDbKind } from "#runtime/db";
 import { checkMigrationNames } from "./migration-names.ts";
+
+export { Kysely, sql } from "kysely";
+
+/**
+ * The `db` passed to `up` and `down`, typed loosely: schemas change over time.
+ *
+ * Use it, never `getDb()`: on SQLite and Postgres it is the run's transaction.
+ */
+// oxlint-disable-next-line typescript/no-explicit-any -- Migration uses any
+export type MigrationDb = Kysely<any>;
+
+/**
+ * The database behind a migration's `db`.
+ */
+export const getDbKind: (db: MigrationDb) => "sqlite" | "postgres" | "d1" =
+  getRuntimeDbKind;
 
 /**
  * Migrations by name, `NN_NNNN_migration_name`, each with `up` and `down`.

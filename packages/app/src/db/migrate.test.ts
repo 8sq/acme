@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, inject, it } from "vitest";
 import { getDb } from "#runtime/db";
-import { type Migrations, migrate } from "./migrate.server.ts";
+import {
+  getDbKind,
+  type MigrationDb,
+  type Migrations,
+  migrate,
+  sql,
+} from "./migrate.server.ts";
 import { checkMigrationNames } from "./migration-names.ts";
 
-const isD1 = inject("database") === "d1";
+const database = inject("database");
+const isD1 = database === "d1";
 const databases = ["default", "audit"];
 
 const createTableMigration = (table: string) => {
@@ -202,6 +209,23 @@ describe("migrate", () => {
     await expect(failing).rejects.toThrow("migration failed");
 
     expect(await getTables("audit")).toEqual(["broken", "entry"]);
+  });
+});
+
+describe("migration exports", () => {
+  beforeEach(resetDatabases);
+
+  it("passes a db that getDbKind() and sql work on", async () => {
+    const kinds: string[] = [];
+    const up = async (db: MigrationDb) => {
+      kinds.push(getDbKind(db));
+      await sql`create table widget (id integer primary key)`.execute(db);
+    };
+    const down = () => Promise.resolve();
+    await migrate({ default: { "00_0001_widget": { up, down } } }, []);
+
+    expect(kinds).toEqual([database]);
+    expect(await getTables("default")).toEqual(["widget"]);
   });
 });
 
