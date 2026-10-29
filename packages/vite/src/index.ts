@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { cloudflare } from "@cloudflare/vite-plugin";
+import { cloudflare, type PluginConfig } from "@cloudflare/vite-plugin";
 import { reactRouter } from "@react-router/dev/vite";
 import type { Plugin, PluginOption } from "vite";
 
@@ -76,6 +76,27 @@ const createSsrPlugin = (): Plugin => ({
   }),
 });
 
+// `<worker>-<name>`, not wrangler's `<worker>-<binding>`: a re-created preview
+// Worker reconnects to its database by name, and `migrate` can find it.
+const createD1Config =
+  (names: readonly string[]): PluginConfig["config"] =>
+  ({ name: configName }) => {
+    if (names.length === 0) {
+      return;
+    }
+
+    const worker = readEnv("ACME_WORKER_NAME", configName ?? "");
+    if (worker === "") {
+      throw new Error("databases need a Worker name or ACME_WORKER_NAME");
+    }
+
+    const d1Databases = names.map((name) => ({
+      binding: `${name.toUpperCase()}_DB`,
+      database_name: `${worker}-${name}`,
+    }));
+    return { d1_databases: d1Databases };
+  };
+
 export interface Options {
   /**
    * Names for `getDb()` from `@acme/app/db`; none leaves it unused.
@@ -89,8 +110,12 @@ export interface Options {
 const acme = ({ databases = [] }: Options = {}): PluginOption[] => {
   checkDatabaseNames(databases);
 
+  const d1Config = createD1Config(databases);
   const cloudflarePlugins = isWorkerd
-    ? cloudflare({ viteEnvironment: { name: "ssr" } })
+    ? cloudflare({
+        viteEnvironment: { name: "ssr" },
+        config: d1Config,
+      })
     : [];
   return [
     createIdentityPlugin(),
