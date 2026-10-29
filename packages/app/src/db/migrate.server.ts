@@ -1,7 +1,7 @@
 import type { Kysely } from "kysely";
 import { type Migration, Migrator, NO_MIGRATIONS } from "kysely/migration";
-import { getDb, getDbKind as getRuntimeDbKind } from "#runtime/db";
-import { checkMigrationNames } from "./migration-names.ts";
+import { closeDbs, getDb, getDbKind as getRuntimeDbKind } from "#runtime/db";
+import { checkMigrationNames } from "@acme/shared/rules";
 
 export { Kysely, sql } from "kysely";
 
@@ -37,7 +37,7 @@ const getTargetName = (names: readonly string[], target: string) => {
   return names.find((name) => name === target);
 };
 
-// Modules from import.meta.glob escape the `Migrations` type.
+// The build imports migration modules untyped, past the `Migrations` type.
 // On a revert, Kysely skips a missing `down` and keeps the migration applied.
 const checkDowns = (database: string, migrations: Migrations) => {
   const downless = Object.keys(migrations).filter(
@@ -142,5 +142,33 @@ export const migrate = async (
     const migrations = migrationsByDatabase[name] ?? {};
     // oxlint-disable-next-line no-await-in-loop -- one database at a time
     await migrateDatabase(name, migrations, target);
+  }
+};
+
+const getErrorLines = (error: unknown): string[] => {
+  if (!(error instanceof Error)) return [String(error)];
+
+  const causeLines =
+    error.cause === undefined ? [] : getErrorLines(error.cause);
+  return [error.message, ...causeLines.map((line) => `  ${line}`)];
+};
+
+/**
+ * Runs `migrate()` on `process.argv`, as `build/server/migrate.js` does.
+ *
+ * Sets exit code 1 on any failure, then closes the databases.
+ */
+export const runMigrateScript = async (
+  migrationsByDatabase: Record<string, Migrations>,
+) => {
+  try {
+    const args = process.argv.slice(2);
+    await migrate(migrationsByDatabase, args);
+  } catch (error) {
+    const lines = getErrorLines(error);
+    console.error(lines.join("\n"));
+    process.exitCode = 1;
+  } finally {
+    await closeDbs();
   }
 };

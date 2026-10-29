@@ -7,7 +7,6 @@ import {
   migrate,
   sql,
 } from "./migrate.server.ts";
-import { checkMigrationNames } from "./migration-names.ts";
 
 const database = inject("database");
 const isD1 = database === "d1";
@@ -157,7 +156,9 @@ describe("migrate", () => {
     const badAudit = { "00_0002_entry": createTableMigration("entry") };
     const running = migrate({ ...migrations, audit: badAudit }, []);
 
-    await expect(running).rejects.toThrow("00_0001 is missing");
+    await expect(running).rejects.toThrow(
+      "00_0002_entry breaks the sequence: major 00 starts at 00_0001",
+    );
     expect(await getTables("default")).toEqual([]);
   });
 
@@ -226,42 +227,5 @@ describe("migration exports", () => {
 
     expect(kinds).toEqual([database]);
     expect(await getTables("default")).toEqual(["widget"]);
-  });
-});
-
-describe("checkMigrationNames", () => {
-  it("accepts names numbered from 0001 per major", () => {
-    const names = ["00_0001_a", "00_0002_b", "01_0001_c", "99_0001_d"];
-    const checkNames = () => {
-      checkMigrationNames(names);
-    };
-    expect(checkNames).not.toThrow();
-  });
-
-  it("names every invalid, missing and duplicate migration", () => {
-    const names = [
-      "100_0001_wide_major",
-      "00_00001_wide_sequence",
-      "00_0001_Upper",
-      "00-0001-kebab",
-      "00_0002_a",
-      "01_0002_gap",
-      "01_0003_twin",
-      "01_0003_other_twin",
-    ];
-    const problems = [
-      '"100_0001_wide_major" is not NN_NNNN_migration_name',
-      '"00_00001_wide_sequence" is not NN_NNNN_migration_name',
-      '"00_0001_Upper" is not NN_NNNN_migration_name',
-      '"00-0001-kebab" is not NN_NNNN_migration_name',
-      "00_0001 is missing",
-      "01_0001 is missing",
-      "01_0003 is taken by 01_0003_twin, 01_0003_other_twin",
-    ];
-    const message = `invalid migration names:\n${problems.join("\n")}`;
-    const checkNames = () => {
-      checkMigrationNames(names);
-    };
-    expect(checkNames).toThrow(message);
   });
 });

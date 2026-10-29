@@ -4,6 +4,7 @@ import type { Plugin } from "vite";
 import { createD1Config } from "./d1.ts";
 import { checkDatabaseNames, createDatabasesPlugin } from "./databases.ts";
 import { createIdentityPlugin } from "./identity.ts";
+import { createMigratePlugin } from "./migrate.ts";
 import { createSsrPlugin } from "./ssr.ts";
 import { isWorkerd } from "./utils.ts";
 
@@ -31,6 +32,7 @@ const acme = ({ databases = [] }: Options = {}): Plugin[] => {
   return [
     createIdentityPlugin(),
     createDatabasesPlugin(databases),
+    createMigratePlugin(databases),
     createSsrPlugin(),
     ...cloudflarePlugins,
     ...reactRouterPlugins,
