@@ -9,8 +9,8 @@ import {
   it,
   vi,
 } from "vitest";
-import { getDbKind } from "#runtime";
-import { runHealthChecks } from "@acme/server";
+import { getDbKind } from "#runtime/db";
+import { runHealthChecks } from "../server/health.ts";
 import { batch, getDb, readAll } from "./index.server.ts";
 import { type Migrations, migrate } from "./migrate.server.ts";
 
@@ -140,7 +140,7 @@ describe.runIf(!isD1)("getDb on SQLite and Postgres", () => {
 
 const importFreshGetDb = async (url?: string) => {
   vi.stubEnv("DEFAULT_DATABASE_URL", url);
-  const { getDb: getFreshDb } = await import("#runtime");
+  const { getDb: getFreshDb } = await import("#runtime/db");
   return () => getFreshDb("default");
 };
 

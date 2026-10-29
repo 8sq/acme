@@ -1,0 +1,5 @@
+{
+  "extends": "@acme/tsconfig/tsconfig.node.json",
+  "include": ["src", "testing"],
+  "exclude": ["src/server"]
+}
