@@ -1,6 +1,6 @@
 import type { Kysely } from "kysely";
 import { type Migration, Migrator, NO_MIGRATIONS } from "kysely/migration";
-import { closeDbs, getDb, getDbKind as getRuntimeDbKind } from "#runtime/db";
+import { getDb, getDbKind as getRuntimeDbKind } from "#runtime/db";
 import { checkMigrationNames } from "@acme/shared/rules";
 
 export { Kysely, sql } from "kysely";
@@ -156,7 +156,7 @@ const getErrorLines = (error: unknown): string[] => {
 /**
  * Runs `migrate()` on `process.argv`, as `build/server/migrate.js` does.
  *
- * Sets exit code 1 on any failure, then closes the databases.
+ * Sets exit code 1 on any failure; `getDb()` closes the databases on exit.
  */
 export const runMigrateScript = async (
   migrationsByDatabase: Record<string, Migrations>,
@@ -168,7 +168,5 @@ export const runMigrateScript = async (
     const lines = getErrorLines(error);
     console.error(lines.join("\n"));
     process.exitCode = 1;
-  } finally {
-    await closeDbs();
   }
 };

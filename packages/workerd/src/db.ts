@@ -15,11 +15,6 @@ export const getDb = (name: string) => {
   return new Kysely<unknown>({ dialect });
 };
 
-// Nothing to close: getDb() makes a fresh instance per call.
-export const closeDbs = () => {
-  return Promise.resolve();
-};
-
 export const getDbKind = <Schema>(_db: Kysely<Schema>) => {
   return "d1" as const;
 };

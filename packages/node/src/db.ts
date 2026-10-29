@@ -254,15 +254,6 @@ export const getDb = (name: string) => {
 };
 
 /**
- * Destroys every Kysely from `getDb()`, so the process can exit.
- */
-export const closeDbs = async () => {
-  const closing = [...instances.values()].map((instance) => instance.destroy());
-  instances.clear();
-  await Promise.all(closing);
-};
-
-/**
  * The database behind `db`, clones from `withPlugin()` and the like included.
  */
 export const getDbKind = <Schema>(db: Kysely<Schema>) => {
