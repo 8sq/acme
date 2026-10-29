@@ -74,7 +74,8 @@ const createPostgresDialect = (url: string, variable: string) => {
   return new PostgresDialect({
     pool: async () => {
       const pg = await importDriver(() => import("pg"), "pg", variable);
-      return new pg.Pool({ connectionString: url });
+      // Idle clients would hold the event loop open for their 10s idle timeout.
+      return new pg.Pool({ connectionString: url, allowExitOnIdle: true });
     },
   });
 };
@@ -189,14 +190,31 @@ const createDb = (name: string) => {
   return new Kysely<unknown>({ dialect });
 };
 
+const destroyAll = () => {
+  const opened = [...instances.values()];
+  instances.clear();
+  const destroying = opened.map((db) => db.destroy());
+  Promise.all(destroying).catch((error: unknown) => {
+    console.error("closing the databases failed", error);
+    process.exitCode = 1;
+  });
+};
+
 /**
  * One Kysely per name per process, from `<NAME>_DATABASE_URL` (`sqlite:<path>`,
  * `postgres://`).
+ *
+ * Every database closes when the event loop drains, after the host's shutdown.
  */
 export const getDb = (name: string) => {
   let instance = instances.get(name);
   if (!instance) {
     instance = createDb(name);
+    // A signal listener would replace Node's default exit on SIGTERM.
+    if (instances.size === 0) {
+      process.once("beforeExit", destroyAll);
+    }
+
     instances.set(name, instance);
   }
 
