@@ -1,12 +1,26 @@
+import { getDb } from "@acme/app/db";
 import { runtime } from "@acme/app/server";
 import { useLoaderData } from "react-router";
 
-export const loader = () => {
-  return { runtime: runtime.name };
+declare module "@acme/app/db" {
+  interface Databases {
+    default: object;
+  }
+}
+
+export const loader = async () => {
+  const row = await getDb()
+    .selectNoFrom((builder) => builder.lit(1).as("one"))
+    .executeTakeFirst();
+  return { runtime: runtime.name, one: row?.one };
 };
 
 export default function Home() {
   const data = useLoaderData<typeof loader>();
 
-  return <h1>Hello from {data.runtime}</h1>;
+  return (
+    <h1>
+      Hello from {data.runtime}, select 1 = {data.one}
+    </h1>
+  );
 }
