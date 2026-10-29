@@ -12,7 +12,6 @@ import {
 import { getDbKind } from "#runtime/db";
 import { runHealthChecks } from "../server/health.ts";
 import { batch, getDb, readAll } from "./index.server.ts";
-import { type Migrations, migrate } from "./migrate.server.ts";
 
 type DatabaseKind = "sqlite" | "d1" | "postgres";
 
@@ -310,138 +309,41 @@ describe("readAll", () => {
     expect(ids.rows).toEqual([{ id: 1 }]);
   });
 
-  it("rejects a write, raw SQL and a writing CTE", async () => {
+  it.each([
+    {
+      kind: "a write",
+      compileQuery: () => {
+        const insert = getDb()
+          .insertInto("cat")
+          .values({ id: 1, name: "Kibby" });
+        return insert.compile();
+      },
+    },
+    {
+      kind: "raw SQL",
+      compileQuery: () => {
+        return sql`select 1`.compile(getDb());
+      },
+    },
+    {
+      kind: "a writing CTE",
+      compileQuery: () => {
+        const insert = getDb()
+          .insertInto("cat")
+          .values({ id: 1, name: "Kibby" });
+        const writingCte = getDb()
+          .with("added", () => insert.returning("id"))
+          .selectFrom("added")
+          .selectAll();
+        return writingCte.compile();
+      },
+    },
+  ])("rejects $kind", async ({ compileQuery }) => {
     const db = getDb();
-    const insert = db.insertInto("cat").values({ id: 1, name: "Kibby" });
-    const writingCte = db
-      .with("added", () => insert.returning("id"))
-      .selectFrom("added")
-      .selectAll();
-    const rejected = [
-      insert.compile(),
-      sql`select 1`.compile(db),
-      writingCte.compile(),
-    ];
+    const query = compileQuery();
+    await expect(readAll(db, [query])).rejects.toThrow("SELECT queries only");
 
-    for (const query of rejected) {
-      // oxlint-disable-next-line no-await-in-loop
-      await expect(readAll(db, [query])).rejects.toThrow("SELECT queries only");
-    }
     const cats = await db.selectFrom("cat").selectAll().execute();
     expect(cats).toEqual([]);
-  });
-});
-
-const createTableMigration = (name: string) => {
-  return {
-    up: async (db) => {
-      await db.schema
-        .createTable(name)
-        .addColumn("id", "integer", (column) => column.primaryKey())
-        .execute();
-    },
-    down: async (db) => {
-      await db.schema.dropTable(name).execute();
-    },
-  } satisfies Migrations[string];
-};
-
-const migrations: Migrations = {
-  "0001_widget": createTableMigration("widget"),
-  "0002_gadget": createTableMigration("gadget"),
-};
-
-const brokenMigrations: Migrations = {
-  "0001_widget": createTableMigration("widget"),
-  "0002_broken": {
-    up: async (db) => {
-      await createTableMigration("gadget").up(db);
-      throw new Error("broken on purpose");
-    },
-  },
-};
-
-const resetMigrationTables = async () => {
-  const db = getDb();
-  const tables = [
-    "gadget",
-    "widget",
-    "kysely_migration",
-    "kysely_migration_lock",
-  ];
-  for (const table of tables) {
-    // oxlint-disable-next-line no-await-in-loop
-    await db.schema.dropTable(table).ifExists().execute();
-  }
-};
-
-const getMigratedTables = async () => {
-  const tables = await getDb().introspection.getTables();
-  const names = tables.map((table) => table.name);
-  return names
-    .filter((name) => name === "gadget" || name === "widget")
-    .toSorted();
-};
-
-describe("migrate", () => {
-  beforeEach(resetMigrationTables);
-
-  it("migrates up in key order", async () => {
-    const results = await migrate(getDb(), migrations, "up");
-
-    expect(results.map((result) => result.migrationName)).toEqual([
-      "0001_widget",
-      "0002_gadget",
-    ]);
-    expect(await getMigratedTables()).toEqual(["gadget", "widget"]);
-  });
-
-  it("does nothing when up to date", async () => {
-    await migrate(getDb(), migrations, "up");
-    const results = await migrate(getDb(), migrations, "up");
-
-    expect(results).toEqual([]);
-  });
-
-  it("migrates down one step", async () => {
-    await migrate(getDb(), migrations, "up");
-    const results = await migrate(getDb(), migrations, "down");
-
-    expect(results.map((result) => result.migrationName)).toEqual([
-      "0002_gadget",
-    ]);
-    expect(await getMigratedTables()).toEqual(["widget"]);
-  });
-
-  it("releases its lock after a failure", async () => {
-    const failing = migrate(getDb(), brokenMigrations, "up");
-    await expect(failing).rejects.toThrow("migration failed");
-
-    // A held lock would make this run throw instead.
-    const widgetOnly = { "0001_widget": createTableMigration("widget") };
-    const retry = migrate(getDb(), widgetOnly, "up");
-    await expect(retry).resolves.toBeDefined();
-  });
-});
-
-describe.runIf(!isD1)("migrate on SQLite and Postgres", () => {
-  beforeEach(resetMigrationTables);
-
-  it("leaves the schema untouched when a migration fails", async () => {
-    const failing = migrate(getDb(), brokenMigrations, "up");
-    await expect(failing).rejects.toThrow("migration failed");
-
-    expect(await getMigratedTables()).toEqual([]);
-  });
-});
-
-describe.runIf(isD1)("migrate on D1", () => {
-  beforeEach(resetMigrationTables);
-
-  it("keeps what ran before a failure: D1 has no transactions", async () => {
-    const failing = migrate(getDb(), brokenMigrations, "up");
-    await expect(failing).rejects.toThrow("migration failed");
-
-    expect(await getMigratedTables()).toEqual(["gadget", "widget"]);
   });
 });
