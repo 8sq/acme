@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.22.1-trixie-slim AS build
+FROM node:26.13.0-trixie-slim AS build
 RUN npm install -g pnpm@12.16.0
 WORKDIR /repo
 
@@ -17,7 +17,7 @@ RUN pnpm --filter @acme/ygoma build
 RUN pnpm --filter @acme/ygoma deploy --prod /deploy
 
 # Same base as the build stage, so native modules keep a matching ABI.
-FROM node:24.22.1-trixie-slim
+FROM node:26.13.0-trixie-slim
 ENV NODE_ENV=production \
     PORT=3000 \
     DEFAULT_DATABASE_URL=sqlite:/var/lib/ygoma/ygoma.db
