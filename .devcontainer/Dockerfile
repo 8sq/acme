@@ -1,4 +1,4 @@
-FROM node:24.22.1-trixie
+FROM node:26.13.0-trixie
 
 # pnpm switches itself to the version pinned in package.json
 RUN npm install -g pnpm
