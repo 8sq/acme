@@ -1,10 +1,12 @@
 import {
   type CompiledQuery,
+  type ControlledTransaction,
   type Kysely,
   type OperationNode,
   type QueryResult,
   SelectQueryNode,
   sql,
+  type Transaction,
 } from "kysely";
 import {
   batch as runBatch,
@@ -30,6 +32,12 @@ interface GetDb {
   (...args: NoName): DefaultDb;
   <Name extends DatabaseName>(name: Name): Kysely<Databases[Name]>;
 }
+
+// TypeScript infers no Tables from a Transaction given where a Kysely is due.
+type AnyDb<Tables> =
+  | Kysely<Tables>
+  | Transaction<Tables>
+  | ControlledTransaction<Tables, string[]>;
 
 /**
  * One `QueryResult` per query passed to `batch()` or `readAll()`, in order.
@@ -73,11 +81,17 @@ addHealthCheck("database", async () => {
 
 /**
  * Runs compiled queries atomically, in order: all succeed or none do.
+ * Every query runs on `db`, whichever database compiled it.
  *
  * Postgres retries the whole batch on serialization failures, up to 10 times.
+ *
+ * Given a transaction, runs in a savepoint without retries.
+ * Other queries on that transaction wait until the batch ends.
+ * A failure undoes only the batch's writes, so the transaction stays usable.
+ * A `SuppressedError` means the rollback failed: roll the transaction back.
  */
 export const batch = async <Tables, Queries extends readonly CompiledQuery[]>(
-  db: Kysely<Tables>,
+  db: AnyDb<Tables>,
   queries: readonly [...Queries],
 ) => {
   const results = await runBatch(db, queries);
@@ -96,7 +110,7 @@ const isSelect = (node: OperationNode): boolean => {
  * Runs compiled SELECT queries, with no atomicity or shared snapshot.
  */
 export const readAll = async <Tables, Queries extends readonly CompiledQuery[]>(
-  db: Kysely<Tables>,
+  db: AnyDb<Tables>,
   queries: readonly [...Queries],
 ) => {
   if (!queries.every((query) => isSelect(query.query))) {

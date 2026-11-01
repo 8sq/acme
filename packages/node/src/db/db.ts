@@ -5,29 +5,14 @@ import {
   Kysely,
   PostgresDialect,
   PostgresIntrospector,
-  type QueryResult,
   SqliteAdapter,
   SqliteDialect,
   type SqliteDialectConfig,
   SqliteDriver,
   SqliteIntrospector,
-  sql,
 } from "kysely";
 
 const instances = new Map<string, Kysely<unknown>>();
-
-// Postgres serialization failures; a batch is fixed SQL, so retrying is safe.
-const batchAttempts = 10;
-// Random waits spread retries out; without them, they collide again at once.
-const maxBackoffMs = 200;
-
-const waitBeforeRetry = (attempt: number) => {
-  const ceiling = Math.min(maxBackoffMs, 5 * 2 ** attempt);
-  const delay = Math.random() * ceiling;
-  return new Promise((resolve) => {
-    setTimeout(resolve, delay);
-  });
-};
 
 const importDriver = async <Driver>(
   load: () => Promise<{ default: Driver }>,
@@ -112,86 +97,20 @@ const createPostgresDialect = (url: string, variable: string) => {
   });
 };
 
-const executeInOrder = async <Schema>(
-  db: Kysely<Schema>,
-  queries: readonly CompiledQuery[],
-) => {
-  const results: QueryResult<unknown>[] = [];
-  for (const query of queries) {
-    // oxlint-disable-next-line no-await-in-loop
-    const result = await db.executeQuery(query);
-    results.push(result);
-  }
-  return results;
-};
-
-const batchSqlite = <Schema>(
-  db: Kysely<Schema>,
-  queries: readonly CompiledQuery[],
-) => {
-  // IMMEDIATE takes the write lock up front instead of failing on upgrade.
-  return db.connection().execute(async (connection) => {
-    await sql`begin immediate`.execute(connection);
-    try {
-      const results = await executeInOrder(connection, queries);
-      await sql`commit`.execute(connection);
-      return results;
-    } catch (error) {
-      await sql`rollback`.execute(connection);
-      throw error;
-    }
-  });
-};
-
-const isSerializationFailure = (error: unknown) => {
-  return error instanceof Error && "code" in error && error.code === "40001";
-};
-
-const batchPostgres = async <Schema>(
-  db: Kysely<Schema>,
-  queries: readonly CompiledQuery[],
-  attempt = 1,
-): Promise<QueryResult<unknown>[]> => {
-  try {
-    return await db
-      .transaction()
-      .setIsolationLevel("serializable")
-      .execute((trx) => executeInOrder(trx, queries));
-  } catch (error) {
-    if (attempt < batchAttempts && isSerializationFailure(error)) {
-      await waitBeforeRetry(attempt);
-      return batchPostgres(db, queries, attempt + 1);
-    }
-    throw error;
-  }
-};
-
-const executeInParallel = <Schema>(
-  db: Kysely<Schema>,
-  queries: readonly CompiledQuery[],
-) => {
-  const pending = queries.map((query) => db.executeQuery(query));
-  return Promise.all(pending);
-};
-
 const databases = {
   sqlite: {
     schemes: ["sqlite"],
     Introspector: SqliteIntrospector,
     createDialect: createSqliteDialect,
-    batch: batchSqlite,
-    readAll: executeInOrder,
   },
   postgres: {
     schemes: ["postgres", "postgresql"],
     Introspector: PostgresIntrospector,
     createDialect: createPostgresDialect,
-    batch: batchPostgres,
-    readAll: executeInParallel,
   },
 };
 
-type Kind = keyof typeof databases;
+export type Kind = keyof typeof databases;
 const kinds = Object.keys(databases) as Kind[];
 
 const schemeKinds = kinds.flatMap((kind) => {
@@ -233,15 +152,18 @@ const destroyAll = () => {
 };
 
 /**
- * One Kysely per name per process, from `<NAME>_DATABASE_URL` (`sqlite:<path>`,
- * `postgres://`).
+ * One Kysely per name per process, from `<NAME>_DATABASE_URL`
+ * (`sqlite:<path>`, `postgres://`).
  *
  * Every database closes when the event loop drains, after the host's shutdown.
  */
 export const getDb = (name: string) => {
   let instance = instances.get(name);
   if (!instance) {
+    // Created before the exit listener is added,
+    // so that a potential throw leaves none behind.
     instance = createDb(name);
+
     // A signal listener would replace Node's default exit on SIGTERM.
     if (instances.size === 0) {
       process.once("beforeExit", destroyAll);
@@ -261,20 +183,4 @@ export const getDbKind = <Schema>(db: Kysely<Schema>) => {
   if (!kind) throw new Error("not a database from getDb()");
 
   return kind;
-};
-
-export const batch = <Schema>(
-  db: Kysely<Schema>,
-  queries: readonly CompiledQuery[],
-) => {
-  const database = databases[getDbKind(db)];
-  return database.batch(db, queries);
-};
-
-export const readAll = <Schema>(
-  db: Kysely<Schema>,
-  queries: readonly CompiledQuery[],
-) => {
-  const database = databases[getDbKind(db)];
-  return database.readAll(db, queries);
 };

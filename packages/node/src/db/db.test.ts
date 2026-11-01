@@ -8,7 +8,7 @@ import { Client } from "pg";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const postgresUrl = process.env.ACME_TEST_POSTGRES_URL;
-const serverUrl = new URL("../testing/shutdown-server.ts", import.meta.url);
+const serverUrl = new URL("../../testing/shutdown-server.ts", import.meta.url);
 const serverPath = fileURLToPath(serverUrl);
 
 // Without allowExitOnIdle, pg's idle clients hold the process for 10s.
@@ -70,7 +70,7 @@ const terminateBackend = async (url: string, pid: number | undefined) => {
 
 // Opened databases are module state: each test gets a fresh module.
 const importDb = () => {
-  return import("./db.ts");
+  return import("./index.ts");
 };
 
 const sqliteOnly = {

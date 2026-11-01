@@ -100,7 +100,7 @@
         // Fakes for one test file may each need a class.
         "max-classes-per-file": "off",
         "unicorn/consistent-function-scoping": "off",
-        "eslint/max-lines": ["warn", { "max": 500 }]
+        "eslint/max-lines": "off"
       }
     },
     {
