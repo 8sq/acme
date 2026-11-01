@@ -5,7 +5,7 @@ import { setTimeout as wait } from "node:timers/promises";
 import Database from "better-sqlite3";
 import { sql } from "kysely";
 import { Pool } from "pg";
-import { getDb } from "../src/db.ts";
+import { getDb } from "../src/db/index.ts";
 
 type Method = (this: unknown, ...args: unknown[]) => unknown;
 

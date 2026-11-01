@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./db": "./src/db.ts"
+    "./db": "./src/db/index.ts"
   },
   "dependencies": {
     "kysely": "catalog:"

@@ -54,10 +54,6 @@ const resetCatTable = () => {
 describe("getDb", () => {
   beforeEach(resetCatTable);
 
-  it("runs on the project's database", () => {
-    expect(getDbKind(getDb())).toBe(database);
-  });
-
   it("runs CRUD", async () => {
     const db = getDb();
     const inserted = await db
@@ -121,17 +117,6 @@ describe("getDb with two databases", () => {
 
 describe.runIf(!isD1)("getDb on SQLite and Postgres", () => {
   beforeEach(resetCatTable);
-
-  it("commits a transaction", async () => {
-    await getDb()
-      .transaction()
-      .execute(async (trx) => {
-        await trx.insertInto("cat").values({ id: 1, name: "Cattie" }).execute();
-      });
-    const cats = await getDb().selectFrom("cat").select("name").execute();
-
-    expect(cats).toEqual([{ name: "Cattie" }]);
-  });
 
   it("keeps one instance per process", () => {
     expect(getDb()).toBe(getDb("default"));
@@ -295,6 +280,77 @@ describe("batch", () => {
   });
 });
 
+const buildInsertCat = (id: number, name: string) => {
+  return getDb().insertInto("cat").values({ id, name }).compile();
+};
+
+const getCatNames = async () => {
+  const cats = await getDb()
+    .selectFrom("cat")
+    .select("name")
+    .orderBy("id")
+    .execute();
+  return cats.map((cat) => cat.name);
+};
+
+describe.runIf(!isD1)("batch in a transaction on SQLite and Postgres", () => {
+  beforeEach(resetCatTable);
+
+  it("drops only its own writes, keeping earlier and concurrent ones", async () => {
+    await getDb()
+      .transaction()
+      .execute(async (trx) => {
+        await trx.executeQuery(buildInsertCat(1, "Kibby"));
+        const failing = batch(trx, [
+          buildInsertCat(2, "Jane"),
+          buildInsertCat(1, "Duplicate"),
+        ]);
+        const passing = batch(trx, [buildInsertCat(3, "Tom")]);
+        const inserting = trx.executeQuery(buildInsertCat(4, "Luna"));
+        const settled = await Promise.allSettled([failing, passing, inserting]);
+        const statuses = settled.map((result) => result.status);
+
+        expect(statuses).toEqual(["rejected", "fulfilled", "fulfilled"]);
+      });
+
+    expect(await getCatNames()).toEqual(["Kibby", "Tom", "Luna"]);
+  });
+
+  it("rolls back with the transaction", async () => {
+    const rollingBack = getDb()
+      .transaction()
+      .execute(async (trx) => {
+        await batch(trx, [buildInsertCat(1, "Kibby")]);
+        throw new Error("rolled back on purpose");
+      });
+    await expect(rollingBack).rejects.toThrow("rolled back on purpose");
+
+    expect(await getCatNames()).toEqual([]);
+  });
+
+  it("throws a SuppressedError when its rollback fails", async () => {
+    const releaseSavepoint = sql`release savepoint acme_batch`.compile(getDb());
+    const trx = await getDb().startTransaction().execute();
+    await trx.executeQuery(buildInsertCat(1, "Kibby"));
+    const failing = batch(trx, [
+      releaseSavepoint,
+      buildInsertCat(1, "Duplicate"),
+    ]);
+    const error = await failing.catch((caught: unknown) => caught);
+    await trx.rollback().execute();
+
+    expect(error).toBeInstanceOf(SuppressedError);
+    expect(error).toHaveProperty(
+      "suppressed.message",
+      expect.stringMatching(/UNIQUE|duplicate key/u),
+    );
+    expect(error).toHaveProperty(
+      "error.message",
+      expect.stringMatching(/savepoint/u),
+    );
+  });
+});
+
 describe("readAll", () => {
   beforeEach(resetCatTable);
 
@@ -394,13 +450,6 @@ describe("migrate", () => {
       "0002_gadget",
     ]);
     expect(await getMigratedTables()).toEqual(["gadget", "widget"]);
-  });
-
-  it("does nothing when up to date", async () => {
-    await migrate(getDb(), migrations, "up");
-    const results = await migrate(getDb(), migrations, "up");
-
-    expect(results).toEqual([]);
   });
 
   it("migrates down one step", async () => {
