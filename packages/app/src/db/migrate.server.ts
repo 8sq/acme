@@ -1,7 +1,8 @@
 import type { Kysely } from "kysely";
-import { type Migration, Migrator, NO_MIGRATIONS } from "kysely/migration";
-import { getDb, getDbKind as getRuntimeDbKind } from "#runtime/db";
+import type { Migration } from "kysely/migration";
+import { getDbKind as getRuntimeDbKind } from "#runtime/db";
 import { checkMigrationNames } from "@acme/shared/rules";
+import { migrateDatabase } from "./migrator.server.ts";
 
 export { Kysely, sql } from "kysely";
 
@@ -26,19 +27,23 @@ export const getDbKind: (db: MigrationDb) => "sqlite" | "postgres" | "d1" =
  */
 export type Migrations = Record<string, Required<Migration>>;
 
-const getTargetName = (names: readonly string[], target: string) => {
-  if (target === "none") return NO_MIGRATIONS;
-  if (/^\d{2}$/u.test(target)) {
-    return names.findLast((name) => name.startsWith(`${target}_`));
-  }
-  if (/^\d{2}_\d{4}$/u.test(target)) {
-    return names.find((name) => name.startsWith(`${target}_`));
-  }
-  return names.find((name) => name === target);
-};
+/**
+ * Progress from `migrate()`: each step before and after it runs, then how each
+ * database ended.
+ *
+ * Steps inside a transaction are only kept once `persisted` follows.
+ */
+export type MigrationEvent =
+  | {
+      type: "step";
+      database: string;
+      name: string;
+      direction: "up" | "down";
+      status: "running" | "done" | "failed";
+    }
+  | { type: "persisted" | "rolledBack"; database: string };
 
 // The build imports migration modules untyped, past the `Migrations` type.
-// On a revert, Kysely skips a missing `down` and keeps the migration applied.
 const checkDowns = (database: string, migrations: Migrations) => {
   const downless = Object.keys(migrations).filter(
     (name) => typeof migrations[name]?.down !== "function",
@@ -47,39 +52,6 @@ const checkDowns = (database: string, migrations: Migrations) => {
     const list = downless.join(", ");
     const message = `database "${database}": no down in ${list}; use () => Promise.resolve() if nothing needs reverting`;
     throw new Error(message);
-  }
-};
-
-const migrateDatabase = async (
-  database: string,
-  migrations: Migrations,
-  target: string | undefined,
-) => {
-  const names = Object.keys(migrations).toSorted();
-  const targetName =
-    target === undefined ? undefined : getTargetName(names, target);
-  if (target !== undefined && targetName === undefined) {
-    const message = `database "${database}": unknown target "${target}"`;
-    throw new Error(message);
-  }
-
-  const provider = { getMigrations: () => Promise.resolve(migrations) };
-  const db = getDb(database);
-  const migrator = new Migrator({ db, provider });
-  const { error, results = [] } =
-    targetName === undefined
-      ? await migrator.migrateToLatest()
-      : await migrator.migrateTo(targetName);
-  if (error) {
-    const failed = results.find((result) => result.status === "Error");
-    const location = failed ? ` at ${failed.migrationName}` : "";
-    const message = `database "${database}": migration failed${location}`;
-    throw new Error(message, { cause: error });
-  }
-
-  for (const { direction, migrationName } of results) {
-    const verb = direction === "Up" ? "applied" : "reverted";
-    console.log(`${database}: ${verb} ${migrationName}`);
   }
 };
 
@@ -120,6 +92,7 @@ const parseMigrateArgs = (args: readonly string[]) => {
 export const migrate = async (
   migrationsByDatabase: Record<string, Migrations>,
   args: readonly string[],
+  onProgress: (event: MigrationEvent) => void = () => undefined,
 ) => {
   const { target, database } = parseMigrateArgs(args);
   const givenNames = [database, ...Object.keys(migrationsByDatabase)];
@@ -141,8 +114,25 @@ export const migrate = async (
   for (const name of databases) {
     const migrations = migrationsByDatabase[name] ?? {};
     // oxlint-disable-next-line no-await-in-loop -- one database at a time
-    await migrateDatabase(name, migrations, target);
+    await migrateDatabase(name, migrations, target, onProgress);
   }
+};
+
+const writeProgress = (event: MigrationEvent) => {
+  if (event.type !== "step") {
+    const isPersisted = event.type === "persisted";
+    const outcome = isPersisted ? "persisted" : "rolled back";
+    console.log(`${event.database}: ${outcome}`);
+    return;
+  }
+
+  if (event.status === "running") {
+    const verb = event.direction === "up" ? "applying" : "reverting";
+    process.stdout.write(`${event.database}: ${verb} ${event.name}... `);
+    return;
+  }
+
+  console.log(event.status === "done" ? "done!" : "failed!");
 };
 
 const getErrorLines = (error: unknown): string[] => {
@@ -163,7 +153,7 @@ export const runMigrateScript = async (
 ) => {
   try {
     const args = process.argv.slice(2);
-    await migrate(migrationsByDatabase, args);
+    await migrate(migrationsByDatabase, args, writeProgress);
   } catch (error) {
     const lines = getErrorLines(error);
     console.error(lines.join("\n"));

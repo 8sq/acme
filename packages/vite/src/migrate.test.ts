@@ -89,7 +89,7 @@ const getTables = async (url: string) => {
     database.close();
     return rows
       .map((row) => row.name)
-      .filter((name) => !name.startsWith("kysely_"))
+      .filter((name) => !name.startsWith("acme_"))
       .toSorted();
   }
 
@@ -100,7 +100,7 @@ const getTables = async (url: string) => {
   await client.end();
   return rows
     .map((row) => row.tablename)
-    .filter((name) => !name.startsWith("kysely_"))
+    .filter((name) => !name.startsWith("acme_"))
     .toSorted();
 };
 
@@ -109,7 +109,7 @@ const getTables = async (url: string) => {
 const startOtherRun = async (url: string) => {
   const statements = [
     "create table widget (id integer primary key)",
-    "insert into kysely_migration (name, timestamp) values ('00_0001_create_widget', '2026-10-29T00:00:00.000Z')",
+    "insert into acme_migration (name, timestamp) values ('00_0001_create_widget', '2026-10-29T00:00:00.000Z')",
   ];
   if (url.startsWith("sqlite:")) {
     const database = new Database(url.slice("sqlite:".length));
@@ -170,10 +170,12 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
 
     expect(run).toMatchObject({ code: 0, stderr: "" });
     expect(run.stdout.trim().split("\n")).toEqual([
-      "default: applied 00_0001_create_widget",
-      "default: applied 00_0002_create_gadget",
-      "default: applied 01_0001_create_gizmo",
-      "audit: applied 00_0001_create_entry",
+      "default: applying 00_0001_create_widget... done!",
+      "default: applying 00_0002_create_gadget... done!",
+      "default: applying 01_0001_create_gizmo... done!",
+      "default: persisted",
+      "audit: applying 00_0001_create_entry... done!",
+      "audit: persisted",
     ]);
   });
 
@@ -196,6 +198,9 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
     const run = await runMigrate(env);
 
     expect(run.code).toBe(1);
+    expect(run.stdout).toContain(
+      "audit: applying 00_0001_create_entry... failed!\naudit: rolled back\n",
+    );
     expect(run.stderr).toContain(
       'database "audit": migration failed at 00_0001_create_entry',
     );
@@ -226,8 +231,9 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
 
     expect(run).toMatchObject({ code: 0, stderr: "" });
     expect(run.stdout.trim().split("\n")).toEqual([
-      "default: applied 00_0002_create_gadget",
-      "default: applied 01_0001_create_gizmo",
+      "default: applying 00_0002_create_gadget... done!",
+      "default: applying 01_0001_create_gizmo... done!",
+      "default: persisted",
     ]);
   });
   it("applies each migration once across concurrent processes", async () => {
@@ -236,7 +242,9 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
     expect(runs.map((run) => run.code)).toEqual([0, 0]);
     const lines = runs.flatMap((run) => run.stdout.trim().split("\n"));
     const widgetLines = lines.filter((line) => line.includes("widget"));
-    expect(widgetLines).toEqual(["default: applied 00_0001_create_widget"]);
+    expect(widgetLines).toEqual([
+      "default: applying 00_0001_create_widget... done!",
+    ]);
   });
 });
 

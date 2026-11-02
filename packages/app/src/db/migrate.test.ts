@@ -3,6 +3,7 @@ import { getDb } from "#runtime/db";
 import {
   getDbKind,
   type MigrationDb,
+  type MigrationEvent,
   type Migrations,
   migrate,
   sql,
@@ -48,7 +49,7 @@ const migrations = { default: defaultMigrations, audit: auditMigrations };
 
 const resetDatabases = async () => {
   const tables = ["widget", "gadget", "gizmo", "entry", "broken"];
-  const migrationTables = ["kysely_migration", "kysely_migration_lock"];
+  const migrationTables = ["acme_migration", "acme_migration_lock"];
   for (const name of databases) {
     for (const table of [...tables, ...migrationTables]) {
       // oxlint-disable-next-line no-await-in-loop
@@ -61,7 +62,7 @@ const getTables = async (name: string) => {
   const tables = await getDb(name).introspection.getTables();
   return tables
     .map((table) => table.name)
-    .filter((table) => !table.startsWith("kysely_"))
+    .filter((table) => !table.startsWith("acme_"))
     .toSorted();
 };
 
@@ -75,10 +76,72 @@ describe("migrate", () => {
     expect(await getTables("audit")).toEqual(["entry"]);
   });
 
+  it("reports each step before and after it runs, then persisted", async () => {
+    const events: MigrationEvent[] = [];
+    const collect = (event: MigrationEvent) => {
+      events.push(event);
+    };
+    await migrate(migrations, ["00_0002", "--db", "default"], collect);
+    await migrate(migrations, ["00_0001", "--db", "default"], collect);
+
+    expect(events).toEqual([
+      {
+        type: "step",
+        database: "default",
+        name: "00_0001_widget",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "default",
+        name: "00_0001_widget",
+        direction: "up",
+        status: "done",
+      },
+      {
+        type: "step",
+        database: "default",
+        name: "00_0002_gadget",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "default",
+        name: "00_0002_gadget",
+        direction: "up",
+        status: "done",
+      },
+      { type: "persisted", database: "default" },
+      {
+        type: "step",
+        database: "default",
+        name: "00_0002_gadget",
+        direction: "down",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "default",
+        name: "00_0002_gadget",
+        direction: "down",
+        status: "done",
+      },
+      { type: "persisted", database: "default" },
+    ]);
+  });
+
   // A migration applied twice throws: its table already exists.
   it("does nothing when up to date", async () => {
     await migrate(migrations, []);
-    await expect(migrate(migrations, [])).resolves.toBeUndefined();
+    const events: MigrationEvent[] = [];
+    const running = migrate(migrations, [], (event) => {
+      events.push(event);
+    });
+
+    await expect(running).resolves.toBeUndefined();
+    expect(events).toEqual([]);
   });
 
   it("limits a run to --db", async () => {
@@ -166,6 +229,54 @@ describe("migrate", () => {
     expect(await getTables("default")).toEqual([]);
   });
 
+  it("reverts in name order, whatever order they were applied in", async () => {
+    const reverted: string[] = [];
+    const recording = Object.fromEntries(
+      Object.entries(defaultMigrations).map(([name, migration]) => {
+        const down = async (db: MigrationDb) => {
+          reverted.push(name);
+          await migration.down(db);
+        };
+        return [name, { ...migration, down }];
+      }),
+    );
+    await migrate({ default: recording }, []);
+    const timestamp = "2000-01-01T00:00:00.000Z";
+    const backdate = sql`update acme_migration set timestamp = ${timestamp} where name = ${"01_0001_gizmo"}`;
+    await backdate.execute(getDb("default"));
+    await migrate({ default: recording }, ["none", "--db", "default"]);
+
+    expect(reverted).toEqual([
+      "01_0001_gizmo",
+      "00_0002_gadget",
+      "00_0001_widget",
+    ]);
+  });
+
+  it.each([
+    {
+      applied: "02_0001_unknown",
+      message: "applied migration 02_0001_unknown is not in this build",
+    },
+    {
+      applied: "01_0001_gizmo",
+      message: "00_0002_gadget is not applied, but the later 01_0001_gizmo is",
+    },
+  ])(
+    "refuses a database with $applied applied",
+    async ({ applied, message }) => {
+      await migrate(migrations, ["00_0001", "--db", "default"]);
+      const timestamp = new Date().toISOString();
+      const insert = sql`insert into acme_migration (name, timestamp) values (${applied}, ${timestamp})`;
+      await insert.execute(getDb("default"));
+      const running = migrate(migrations, ["--db", "default"]);
+
+      await expect(running).rejects.toThrow("migration failed");
+      await expect(running).rejects.toHaveProperty("cause.message", message);
+      expect(await getTables("default")).toEqual(["widget"]);
+    },
+  );
+
   it.runIf(!isD1)(
     "waits for a concurrent run, then finds it done",
     async () => {
@@ -200,20 +311,88 @@ describe("migrate", () => {
     await expect(retry).resolves.toBeUndefined();
   });
 
-  it.runIf(!isD1)("leaves the schema untouched when one fails", async () => {
+  it.runIf(!isD1)("rolls every step back when one fails", async () => {
+    const events: MigrationEvent[] = [];
     const broken = { ...auditMigrations, "00_0002_broken": brokenMigration };
-    const failing = migrate({ audit: broken }, ["--db", "audit"]);
+    const failing = migrate({ audit: broken }, ["--db", "audit"], (event) => {
+      events.push(event);
+    });
     await expect(failing).rejects.toThrow("migration failed");
 
     expect(await getTables("audit")).toEqual([]);
+    expect(events).toEqual([
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0001_entry",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0001_entry",
+        direction: "up",
+        status: "done",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0002_broken",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0002_broken",
+        direction: "up",
+        status: "failed",
+      },
+      { type: "rolledBack", database: "audit" },
+    ]);
   });
 
   it.runIf(isD1)("keeps what ran before a failure on D1", async () => {
+    const events: MigrationEvent[] = [];
     const broken = { ...auditMigrations, "00_0002_broken": brokenMigration };
-    const failing = migrate({ audit: broken }, ["--db", "audit"]);
+    const failing = migrate({ audit: broken }, ["--db", "audit"], (event) => {
+      events.push(event);
+    });
     await expect(failing).rejects.toThrow("migration failed");
 
     expect(await getTables("audit")).toEqual(["broken", "entry"]);
+    expect(events).toEqual([
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0001_entry",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0001_entry",
+        direction: "up",
+        status: "done",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0002_broken",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0002_broken",
+        direction: "up",
+        status: "failed",
+      },
+      { type: "persisted", database: "audit" },
+    ]);
   });
 });
 
