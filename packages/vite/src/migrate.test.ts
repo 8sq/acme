@@ -29,7 +29,13 @@ const runCommand = (
   args: string[],
   options: { cwd?: string; env?: Record<string, string> },
 ) => {
-  const env = { ...process.env, ...options.env };
+  // Color variables from the test runner would change migrate.js output.
+  const inherited = {
+    ...process.env,
+    FORCE_COLOR: undefined,
+    NO_COLOR: undefined,
+  };
+  const env = { ...inherited, ...options.env };
   const child = spawn(command, args, { cwd: options.cwd, env });
   let stdout = "";
   let stderr = "";
@@ -177,6 +183,35 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
       "audit: applying 00_0001_create_entry... done!",
       "audit: persisted",
     ]);
+  });
+
+  it.each<{ name: string; args: string[]; env: Record<string, string> }>([
+    { name: "nothing set", args: [], env: {} },
+    { name: "--no-color", args: ["--no-color"], env: { FORCE_COLOR: "1" } },
+    { name: "NO_COLOR", args: [], env: { FORCE_COLOR: "1", NO_COLOR: "1" } },
+  ])("prints no colors with $name", async ({ args, env: colorEnv }) => {
+    const run = await runMigrate({ ...env, ...colorEnv }, [
+      "--db",
+      "audit",
+      ...args,
+    ]);
+
+    expect(run).toMatchObject({ code: 0, stderr: "" });
+    expect(run.stdout).toBe(
+      "audit: applying 00_0001_create_entry... done!\naudit: persisted\n",
+    );
+  });
+
+  it("colors its output with FORCE_COLOR", async () => {
+    const run = await runMigrate({ ...env, FORCE_COLOR: "1" }, [
+      "--db",
+      "audit",
+    ]);
+
+    expect(run).toMatchObject({ code: 0, stderr: "" });
+    expect(run.stdout).toBe(
+      "audit: applying 00_0001_create_entry... \u001B[32mdone!\u001B[39m\naudit: \u001B[32mpersisted\u001B[39m\n",
+    );
   });
 
   it.each([

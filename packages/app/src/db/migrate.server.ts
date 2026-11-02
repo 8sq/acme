@@ -55,7 +55,7 @@ const checkDowns = (database: string, migrations: Migrations) => {
   }
 };
 
-const usage = "usage: migrate.js [<target>] [--db <name>]";
+const usage = "usage: migrate.js [<target>] [--db <name>] [--no-color]";
 
 // workerd, where the D1 tests run, has no `parseArgs` from node:util.
 const parseMigrateArgs = (args: readonly string[]) => {
@@ -118,21 +118,46 @@ export const migrate = async (
   }
 };
 
-const writeProgress = (event: MigrationEvent) => {
-  if (event.type !== "step") {
-    const isPersisted = event.type === "persisted";
-    const outcome = isPersisted ? "persisted" : "rolled back";
-    console.log(`${event.database}: ${outcome}`);
-    return;
+const colorCodes = { green: 32, red: 31 };
+
+// NO_COLOR (no-color.org) turns colors off, even with FORCE_COLOR set.
+// FORCE_COLOR turns them on for piped output, as in CI logs.
+const hasColors = (args: readonly string[]) => {
+  if (args.includes("--no-color")) return false;
+
+  const { NO_COLOR: noColor, FORCE_COLOR: forceColor } = process.env;
+  if (noColor !== undefined && noColor !== "") return false;
+  if (forceColor !== undefined) {
+    return forceColor !== "0" && forceColor !== "false";
   }
 
-  if (event.status === "running") {
-    const verb = event.direction === "up" ? "applying" : "reverting";
-    process.stdout.write(`${event.database}: ${verb} ${event.name}... `);
-    return;
-  }
+  return process.stdout.isTTY && process.stdout.hasColors();
+};
 
-  console.log(event.status === "done" ? "done!" : "failed!");
+const createProgressWriter = (colors: boolean) => {
+  const paint = (color: keyof typeof colorCodes, text: string) => {
+    return colors ? `\u001B[${colorCodes[color]}m${text}\u001B[39m` : text;
+  };
+
+  return (event: MigrationEvent) => {
+    if (event.type !== "step") {
+      const isPersisted = event.type === "persisted";
+      const outcome = isPersisted
+        ? paint("green", "persisted")
+        : paint("red", "rolled back");
+      console.log(`${event.database}: ${outcome}`);
+      return;
+    }
+
+    if (event.status === "running") {
+      const verb = event.direction === "up" ? "applying" : "reverting";
+      process.stdout.write(`${event.database}: ${verb} ${event.name}... `);
+      return;
+    }
+
+    const isDone = event.status === "done";
+    console.log(isDone ? paint("green", "done!") : paint("red", "failed!"));
+  };
 };
 
 const getErrorLines = (error: unknown): string[] => {
@@ -152,7 +177,9 @@ export const runMigrateScript = async (
   migrationsByDatabase: Record<string, Migrations>,
 ) => {
   try {
-    const args = process.argv.slice(2);
+    const scriptArgs = process.argv.slice(2);
+    const args = scriptArgs.filter((arg) => arg !== "--no-color");
+    const writeProgress = createProgressWriter(hasColors(scriptArgs));
     await migrate(migrationsByDatabase, args, writeProgress);
   } catch (error) {
     const lines = getErrorLines(error);
