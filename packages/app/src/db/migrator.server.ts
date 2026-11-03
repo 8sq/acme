@@ -1,4 +1,6 @@
-import { getDb } from "#runtime/db";
+import type { ControlledTransaction } from "kysely";
+import { getDb, getDbKind } from "#runtime/db";
+import { sql } from "kysely";
 import type {
   MigrationDb,
   MigrationEvent,
@@ -25,7 +27,7 @@ const createTable = async (
   }
 };
 
-const createMigrationTables = async (db: MigrationDb) => {
+const createMigrationTable = async (db: MigrationDb) => {
   await createTable(db, migrationTable, () => {
     return db.schema
       .createTable(migrationTable)
@@ -36,6 +38,9 @@ const createMigrationTables = async (db: MigrationDb) => {
       .addColumn("timestamp", "varchar(255)", (column) => column.notNull())
       .execute();
   });
+};
+
+const createLockTable = async (db: MigrationDb) => {
   await createTable(db, lockOptions.lockTable, () => {
     return db.schema
       .createTable(lockOptions.lockTable)
@@ -86,48 +91,46 @@ const checkApplied = (names: readonly string[], applied: readonly string[]) => {
 const getSteps = (
   names: readonly string[],
   applied: readonly string[],
-  keep: number,
+  targetCount: number,
 ) => {
-  if (keep < applied.length) {
-    const reverted = applied.slice(keep).toReversed();
+  if (targetCount < applied.length) {
+    const reverted = applied.slice(targetCount).toReversed();
     return reverted.map((name) => ({ name, direction: "down" as const }));
   }
   return names
-    .slice(applied.length, keep)
+    .slice(applied.length, targetCount)
     .map((name) => ({ name, direction: "up" as const }));
 };
 
 type Report = (event: MigrationEvent) => void;
 
-interface Progress {
+// `targetCount` is how many migrations, in name order, stay applied.
+interface DatabaseRun {
   database: string;
+  migrations: Migrations;
+  targetCount: number;
+  transaction?: ControlledTransaction<unknown>;
   running?: string;
   hasSteps: boolean;
-  isTransaction: boolean;
+  isCommitted: boolean;
 }
 
-const runSteps = async (
-  db: MigrationDb,
-  migrations: Migrations,
-  keep: number,
-  progress: Progress,
-  report: Report,
-) => {
-  progress.isTransaction = db.isTransaction;
+const runSteps = async (db: MigrationDb, run: DatabaseRun, report: Report) => {
+  const { database, migrations, targetCount } = run;
   const names = Object.keys(migrations).toSorted();
   const rows = await db.selectFrom(migrationTable).select("name").execute();
   const applied = rows.map(({ name }) => String(name)).toSorted();
   checkApplied(names, applied);
 
-  for (const { name, direction } of getSteps(names, applied, keep)) {
+  for (const { name, direction } of getSteps(names, applied, targetCount)) {
     const step = {
       type: "step" as const,
-      database: progress.database,
+      database,
       name,
       direction,
     };
-    progress.running = name;
-    progress.hasSteps = true;
+    run.running = name;
+    run.hasSteps = true;
     report({ ...step, status: "running" });
     try {
       // oxlint-disable-next-line no-await-in-loop -- migrations run in order
@@ -145,33 +148,80 @@ const runSteps = async (
     }
     report({ ...step, status: "done" });
   }
-  delete progress.running;
+  delete run.running;
+};
+
+// Not Kysely's lock id: its migrators on the same database would block ours.
+const postgresLockId = 5_077_236_158_559_334_355n;
+
+// The commit releases this lock, so no run reads between commit and unlock.
+const lockPostgres = async (db: MigrationDb) => {
+  await sql`set local lock_timeout = '1h'`.execute(db);
+  const lock = sql`select pg_advisory_xact_lock(${sql.lit(postgresLockId)})`;
+  await lock.execute(db);
+  await sql`set local lock_timeout to default`.execute(db);
 };
 
 // Kysely marks `getExecutor()` internal; its own `Migrator` uses it too.
-const runLocked = async (
-  db: MigrationDb,
-  run: (db: MigrationDb) => Promise<void>,
-) => {
+const runD1 = async (db: MigrationDb, run: DatabaseRun, report: Report) => {
   const { adapter } = db.getExecutor();
-  await createMigrationTables(db);
+  await createLockTable(db);
   await db.connection().execute(async (connection) => {
     await adapter.acquireMigrationLock(connection, lockOptions);
     try {
-      await (adapter.supportsTransactionalDdl
-        ? connection.transaction().execute(run)
-        : run(connection));
+      await runSteps(connection, run, report);
+      run.isCommitted = true;
     } finally {
       await adapter.releaseMigrationLock(connection, lockOptions);
     }
   });
 };
 
-export const migrateDatabase = async (
+const migrateUncommitted = async (run: DatabaseRun, report: Report) => {
+  const db = getDb(run.database);
+  await createMigrationTable(db);
+  if (!db.getExecutor().adapter.supportsTransactionalDdl) {
+    await runD1(db, run, report);
+    return;
+  }
+
+  const transaction = await db.startTransaction().execute();
+  run.transaction = transaction;
+  // SQLite needs no lock: its driver starts transactions `begin immediate`.
+  if (getDbKind(db) === "postgres") await lockPostgres(transaction);
+  await runSteps(transaction, run, report);
+};
+
+// A failed rollback still hands its connection back to the pool.
+// Its transaction then ends when the pool closes on exit.
+const rollBack = async (databaseRuns: readonly DatabaseRun[]) => {
+  for (const { transaction, isCommitted } of databaseRuns) {
+    if (transaction === undefined || isCommitted) continue;
+
+    // oxlint-disable-next-line no-await-in-loop -- one database at a time
+    await transaction
+      .rollback()
+      .execute()
+      .catch(() => undefined);
+  }
+};
+
+const reportOutcomes = (
+  databaseRuns: readonly DatabaseRun[],
+  report: Report,
+) => {
+  for (const run of databaseRuns) {
+    // Without a transaction (D1), the steps before a failure stay applied.
+    const isKept = run.isCommitted || run.transaction === undefined;
+    const type = isKept ? "persisted" : "rolledBack";
+    if (run.hasSteps) report({ type, database: run.database });
+  }
+};
+
+const createDatabaseRun = (
   database: string,
   migrations: Migrations,
   target: string | undefined,
-  report: Report,
 ) => {
   const names = Object.keys(migrations).toSorted();
   const targetIndex =
@@ -181,27 +231,54 @@ export const migrateDatabase = async (
     throw new Error(message);
   }
 
-  const progress: Progress = {
+  const targetCount = targetIndex + 1;
+  return {
     database,
+    migrations,
+    targetCount,
     hasSteps: false,
-    isTransaction: false,
+    isCommitted: false,
   };
+};
+
+export const migrateDatabases = async (
+  migrationsByDatabase: Record<string, Migrations>,
+  databases: readonly string[],
+  target: string | undefined,
+  report: Report,
+) => {
+  const databaseRuns: DatabaseRun[] = databases.map((database) => {
+    const migrations = migrationsByDatabase[database] ?? {};
+    return createDatabaseRun(database, migrations, target);
+  });
+
+  let activeRun: DatabaseRun | undefined;
+  let isCommitting = false;
   try {
-    await runLocked(getDb(database), (db) => {
-      return runSteps(db, migrations, targetIndex + 1, progress, report);
-    });
-  } catch (error) {
-    const { running, hasSteps, isTransaction } = progress;
-
-    // Without a transaction (D1), the steps before the failure stay applied.
-    if (hasSteps) {
-      report({ type: isTransaction ? "rolledBack" : "persisted", database });
+    for (const run of databaseRuns) {
+      activeRun = run;
+      // oxlint-disable-next-line no-await-in-loop -- one database at a time
+      await migrateUncommitted(run, report);
     }
+    isCommitting = true;
+    for (const run of databaseRuns) {
+      activeRun = run;
+      // oxlint-disable-next-line no-await-in-loop -- one database at a time
+      await run.transaction?.commit().execute();
+      run.isCommitted = true;
+    }
+  } catch (error) {
+    await rollBack(databaseRuns);
+    if (activeRun === undefined) throw error;
 
+    const { database, running } = activeRun;
     const location = running === undefined ? "" : ` at ${running}`;
-    const message = `database "${database}": migration failed${location}`;
+    const failure = isCommitting
+      ? "commit failed"
+      : `migration failed${location}`;
+    const message = `database "${database}": ${failure}`;
     throw new Error(message, { cause: error });
+  } finally {
+    reportOutcomes(databaseRuns, report);
   }
-
-  if (progress.hasSteps) report({ type: "persisted", database });
 };

@@ -2,7 +2,7 @@ import type { Kysely } from "kysely";
 import type { Migration } from "kysely/migration";
 import { getDbKind as getRuntimeDbKind } from "#runtime/db";
 import { checkMigrationNames } from "@acme/shared/rules";
-import { migrateDatabase } from "./migrator.server.ts";
+import { migrateDatabases } from "./migrator.server.ts";
 
 export { Kysely, sql } from "kysely";
 
@@ -84,7 +84,8 @@ const parseMigrateArgs = (args: readonly string[]) => {
 /**
  * Migrates each database in `@acme/vite`'s order, to its latest or `target`.
  *
- * Stops at the first failing database, leaving earlier ones migrated.
+ * A failure rolls back every database.
+ * On D1, which has no transactions, steps already run stay applied.
  *
  * @param args `[<target>] [--db <name>]`. A target is a name, `XX_YYYY`,
  * `XX` or `none`.
@@ -111,11 +112,7 @@ export const migrate = async (
   }
 
   const databases = database === undefined ? __ACME_DATABASES__ : [database];
-  for (const name of databases) {
-    const migrations = migrationsByDatabase[name] ?? {};
-    // oxlint-disable-next-line no-await-in-loop -- one database at a time
-    await migrateDatabase(name, migrations, target, onProgress);
-  }
+  await migrateDatabases(migrationsByDatabase, databases, target, onProgress);
 };
 
 const colorCodes = { green: 32, red: 31 };

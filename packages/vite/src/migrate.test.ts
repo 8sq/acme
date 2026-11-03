@@ -15,8 +15,8 @@ const reactRouterPath = path.join(
   "../node_modules/.bin/react-router",
 );
 const postgresUrl = process.env.ACME_TEST_POSTGRES_URL;
-// Kysely's advisory lock id for Postgres migrations.
-const postgresLockId = "3853314791062309107";
+// The advisory lock id migrate.js takes on Postgres.
+const postgresLockId = "5077236158559334355";
 
 interface Run {
   code: number | null;
@@ -179,8 +179,8 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
       "default: applying 00_0001_create_widget... done!",
       "default: applying 00_0002_create_gadget... done!",
       "default: applying 01_0001_create_gizmo... done!",
-      "default: persisted",
       "audit: applying 00_0001_create_entry... done!",
+      "default: persisted",
       "audit: persisted",
     ]);
   });
@@ -228,22 +228,23 @@ describe.each(backends)("migrate.js on $name", ({ createEnv }) => {
     expect(await getTables(env.DEFAULT_DATABASE_URL)).toEqual(tables);
   });
 
-  it("exits 1 at a failing database, keeping earlier ones migrated", async () => {
+  it("exits 1 at a failing database, rolling every one back", async () => {
     await createTable(env.AUDIT_DATABASE_URL, "entry");
     const run = await runMigrate(env);
 
     expect(run.code).toBe(1);
-    expect(run.stdout).toContain(
-      "audit: applying 00_0001_create_entry... failed!\naudit: rolled back\n",
-    );
+    expect(run.stdout.trim().split("\n")).toEqual([
+      "default: applying 00_0001_create_widget... done!",
+      "default: applying 00_0002_create_gadget... done!",
+      "default: applying 01_0001_create_gizmo... done!",
+      "audit: applying 00_0001_create_entry... failed!",
+      "default: rolled back",
+      "audit: rolled back",
+    ]);
     expect(run.stderr).toContain(
       'database "audit": migration failed at 00_0001_create_entry',
     );
-    expect(await getTables(env.DEFAULT_DATABASE_URL)).toEqual([
-      "gadget",
-      "gizmo",
-      "widget",
-    ]);
+    expect(await getTables(env.DEFAULT_DATABASE_URL)).toEqual([]);
   });
 
   it("exits 1 on a target without --db, with nothing run", async () => {

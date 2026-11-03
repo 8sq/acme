@@ -47,11 +47,23 @@ const auditMigrations: Migrations = {
 
 const migrations = { default: defaultMigrations, audit: auditMigrations };
 
+// Postgres checks the deferred foreign key at commit, so the commit fails.
+const uncommittableMigration: Migrations[string] = {
+  up: async (db) => {
+    await sql`create table parent (id integer primary key)`.execute(db);
+    const child = sql`create table child (parent_id integer references parent deferrable initially deferred)`;
+    await child.execute(db);
+    await sql`insert into child (parent_id) values (1)`.execute(db);
+  },
+  down: () => Promise.resolve(),
+};
+
 const resetDatabases = async () => {
   const tables = ["widget", "gadget", "gizmo", "entry", "broken"];
+  const deferredTables = ["child", "parent"];
   const migrationTables = ["acme_migration", "acme_migration_lock"];
   for (const name of databases) {
-    for (const table of [...tables, ...migrationTables]) {
+    for (const table of [...tables, ...deferredTables, ...migrationTables]) {
       // oxlint-disable-next-line no-await-in-loop
       await getDb(name).schema.dropTable(table).ifExists().execute();
     }
@@ -179,16 +191,155 @@ describe("migrate", () => {
     expect(await getTables("default")).toEqual(tables);
   });
 
-  it("stops at a failing database, keeping earlier ones migrated", async () => {
-    const auditBroken = { "00_0001_broken": brokenMigration };
-    const withBrokenAudit = { ...migrations, audit: auditBroken };
-    const running = migrate(withBrokenAudit, []);
+  it.runIf(!isD1)(
+    "rolls every database back when a later one fails",
+    async () => {
+      const events: MigrationEvent[] = [];
+      const withBrokenAudit = {
+        default: { "00_0001_widget": createTableMigration("widget") },
+        audit: { "00_0001_broken": brokenMigration },
+      };
+      const running = migrate(withBrokenAudit, [], (event) => {
+        events.push(event);
+      });
+
+      await expect(running).rejects.toThrow(
+        'database "audit": migration failed at 00_0001_broken',
+      );
+      expect(await getTables("default")).toEqual([]);
+      expect(events).toEqual([
+        {
+          type: "step",
+          database: "default",
+          name: "00_0001_widget",
+          direction: "up",
+          status: "running",
+        },
+        {
+          type: "step",
+          database: "default",
+          name: "00_0001_widget",
+          direction: "up",
+          status: "done",
+        },
+        {
+          type: "step",
+          database: "audit",
+          name: "00_0001_broken",
+          direction: "up",
+          status: "running",
+        },
+        {
+          type: "step",
+          database: "audit",
+          name: "00_0001_broken",
+          direction: "up",
+          status: "failed",
+        },
+        { type: "rolledBack", database: "default" },
+        { type: "rolledBack", database: "audit" },
+      ]);
+    },
+  );
+
+  it.runIf(isD1)("keeps earlier databases migrated on D1", async () => {
+    const events: MigrationEvent[] = [];
+    const withBrokenAudit = {
+      default: { "00_0001_widget": createTableMigration("widget") },
+      audit: { "00_0001_broken": brokenMigration },
+    };
+    const running = migrate(withBrokenAudit, [], (event) => {
+      events.push(event);
+    });
 
     await expect(running).rejects.toThrow(
       'database "audit": migration failed at 00_0001_broken',
     );
-    expect(await getTables("default")).toEqual(["gadget", "gizmo", "widget"]);
+    expect(await getTables("default")).toEqual(["widget"]);
+    expect(events).toEqual([
+      {
+        type: "step",
+        database: "default",
+        name: "00_0001_widget",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "default",
+        name: "00_0001_widget",
+        direction: "up",
+        status: "done",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0001_broken",
+        direction: "up",
+        status: "running",
+      },
+      {
+        type: "step",
+        database: "audit",
+        name: "00_0001_broken",
+        direction: "up",
+        status: "failed",
+      },
+      { type: "persisted", database: "default" },
+      { type: "persisted", database: "audit" },
+    ]);
   });
+
+  // The earlier database commits first, so it stays migrated.
+  it.runIf(database === "postgres")(
+    "names what stayed migrated when a commit fails",
+    async () => {
+      const events: MigrationEvent[] = [];
+      const withUncommittable = {
+        default: { "00_0001_widget": createTableMigration("widget") },
+        audit: { "00_0001_parent": uncommittableMigration },
+      };
+      const running = migrate(withUncommittable, [], (event) => {
+        events.push(event);
+      });
+
+      await expect(running).rejects.toThrow('database "audit": commit failed');
+      expect(await getTables("default")).toEqual(["widget"]);
+      expect(await getTables("audit")).toEqual([]);
+      expect(events).toEqual([
+        {
+          type: "step",
+          database: "default",
+          name: "00_0001_widget",
+          direction: "up",
+          status: "running",
+        },
+        {
+          type: "step",
+          database: "default",
+          name: "00_0001_widget",
+          direction: "up",
+          status: "done",
+        },
+        {
+          type: "step",
+          database: "audit",
+          name: "00_0001_parent",
+          direction: "up",
+          status: "running",
+        },
+        {
+          type: "step",
+          database: "audit",
+          name: "00_0001_parent",
+          direction: "up",
+          status: "done",
+        },
+        { type: "persisted", database: "default" },
+        { type: "rolledBack", database: "audit" },
+      ]);
+    },
+  );
 
   it.each([
     { args: ["00"], message: "a target needs --db <name>" },
