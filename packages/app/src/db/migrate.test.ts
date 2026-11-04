@@ -184,9 +184,24 @@ describe("migrate", () => {
       tables: ["gadget", "gizmo", "widget"],
     },
     { from: "01", target: "none", tables: [] },
+    { from: "none", target: "1", tables: ["gadget", "gizmo", "widget"] },
+    { from: "01", target: "0_2", tables: ["gadget", "widget"] },
   ])("moves from $from to $target", async ({ from, target, tables }) => {
     await migrate(migrations, [from, "--db", "default"]);
     await migrate(migrations, [target, "--db", "default"]);
+
+    expect(await getTables("default")).toEqual(tables);
+  });
+
+  it.each([
+    { target: "99", tables: ["widget"] },
+    { target: "100", tables: ["gadget", "widget"] },
+  ])("orders major 100 after 99, to $target", async ({ target, tables }) => {
+    const wideMigrations = {
+      "99_0001_widget": createTableMigration("widget"),
+      "100_0001_gadget": createTableMigration("gadget"),
+    };
+    await migrate({ default: wideMigrations }, [target, "--db", "default"]);
 
     expect(await getTables("default")).toEqual(tables);
   });

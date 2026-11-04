@@ -1,6 +1,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { checkMigrationNames, getMigrationMajor } from "@acme/shared/rules";
+import {
+  checkMigrationNames,
+  compareMigrationNames,
+  getMigrationMajor,
+} from "@acme/shared/rules";
 import type { EnvironmentOptions, Plugin, Rolldown } from "vite";
 import { isWorkerd, readAppPackage } from "./utils.ts";
 
@@ -38,7 +42,7 @@ const readDatabaseMigrations = (directory: string, appMajor: number) => {
   const names = entries.map((entry) => entry.name.slice(0, -".ts".length));
   checkMigrationNames(names);
   checkMajors(names, appMajor);
-  return names.toSorted();
+  return names.toSorted(compareMigrationNames);
 };
 
 // Undefined without app/migrations/: the build then emits no migrate.js.

@@ -1,5 +1,10 @@
 import type { ControlledTransaction } from "kysely";
 import { getDb, getDbKind } from "#runtime/db";
+import {
+  compareMigrationNames,
+  getMigrationMajor,
+  getMigrationSequence,
+} from "@acme/shared/rules";
 import { sql } from "kysely";
 import type {
   MigrationDb,
@@ -62,14 +67,25 @@ const createLockTable = async (db: MigrationDb) => {
 
 // The index of the last migration to keep applied, -1 for none.
 const getTargetIndex = (names: readonly string[], target: string) => {
-  if (target === "none") return -1;
-  if (/^\d{2}$/u.test(target)) {
-    return names.findLastIndex((name) => name.startsWith(`${target}_`));
+  if (target === "none") {
+    return -1;
   }
-  if (/^\d{2}_\d{4}$/u.test(target)) {
-    return names.findIndex((name) => name.startsWith(`${target}_`));
+
+  if (/^\d+$/u.test(target)) {
+    const major = Number(target);
+    return names.findLastIndex((name) => getMigrationMajor(name) === major);
   }
-  return names.indexOf(target);
+
+  const version = /^(\d+)_(\d+)$/u.exec(target);
+  if (version === null) {
+    return names.indexOf(target);
+  }
+
+  const [major, sequence] = version.slice(1).map(Number);
+  return names.findIndex((name) => {
+    const isMajor = getMigrationMajor(name) === major;
+    return isMajor && getMigrationSequence(name) === sequence;
+  });
 };
 
 const checkApplied = (names: readonly string[], applied: readonly string[]) => {
@@ -117,18 +133,15 @@ interface DatabaseRun {
 
 const runSteps = async (db: MigrationDb, run: DatabaseRun, report: Report) => {
   const { database, migrations, targetCount } = run;
-  const names = Object.keys(migrations).toSorted();
+  const names = Object.keys(migrations).toSorted(compareMigrationNames);
   const rows = await db.selectFrom(migrationTable).select("name").execute();
-  const applied = rows.map(({ name }) => String(name)).toSorted();
+  const applied = rows
+    .map(({ name }) => String(name))
+    .toSorted(compareMigrationNames);
   checkApplied(names, applied);
 
   for (const { name, direction } of getSteps(names, applied, targetCount)) {
-    const step = {
-      type: "step" as const,
-      database,
-      name,
-      direction,
-    };
+    const step = { type: "step" as const, database, name, direction };
     run.running = name;
     run.hasSteps = true;
     report({ ...step, status: "running" });
@@ -223,7 +236,7 @@ const createDatabaseRun = (
   migrations: Migrations,
   target: string | undefined,
 ) => {
-  const names = Object.keys(migrations).toSorted();
+  const names = Object.keys(migrations).toSorted(compareMigrationNames);
   const targetIndex =
     target === undefined ? names.length - 1 : getTargetIndex(names, target);
   if (target !== undefined && target !== "none" && targetIndex === -1) {

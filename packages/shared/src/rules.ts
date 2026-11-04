@@ -1,8 +1,8 @@
-// Fixed widths: Kysely sorts pending migrations as strings, not numbers.
-const namePattern = /^(\d{2})_(\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*$/u;
+// Majors past 99 never start with 0, so each major has one spelling.
+const namePattern = /^(?:\d{2}|[1-9]\d{2,})_\d{4}_[a-z0-9]+(?:_[a-z0-9]+)*$/u;
 
 const getMajorPrefix = (name: string) => {
-  return name.slice(0, 2);
+  return name.slice(0, name.indexOf("_"));
 };
 
 /**
@@ -12,21 +12,40 @@ export const getMigrationMajor = (name: string) => {
   return Number(getMajorPrefix(name));
 };
 
-const getSequence = (name: string) => {
-  return Number(name.slice(3, 7));
+/**
+ * The sequence (YYYY) of a `XX_YYYY_migration_name`, as a number.
+ */
+export const getMigrationSequence = (name: string) => {
+  const start = name.indexOf("_") + 1;
+  return Number(name.slice(start, start + 4));
+};
+
+/**
+ * Orders migration names by major, then sequence, as numbers.
+ */
+export const compareMigrationNames = (first: string, second: string) => {
+  const majorOrder = getMigrationMajor(first) - getMigrationMajor(second);
+  if (majorOrder !== 0) return majorOrder;
+
+  const sequenceOrder =
+    getMigrationSequence(first) - getMigrationSequence(second);
+  if (sequenceOrder !== 0) return sequenceOrder;
+
+  if (first === second) return 0;
+  return first < second ? -1 : 1;
 };
 
 // `previous` is the name before this one in its major, if any.
 const getSequenceProblem = (name: string, previous: string | undefined) => {
   const major = getMajorPrefix(name);
-  const sequence = getSequence(name);
+  const sequence = getMigrationSequence(name);
   if (previous === undefined) {
     const startsAtOne = sequence === 1;
     const problem = `${name} breaks the sequence: major ${major} starts at ${major}_0001`;
     return startsAtOne ? undefined : problem;
   }
 
-  const previousSequence = getSequence(previous);
+  const previousSequence = getMigrationSequence(previous);
   if (sequence === previousSequence) {
     return `${name} breaks the sequence: ${previous} has the same number`;
   }
@@ -41,12 +60,12 @@ const getSequenceProblem = (name: string, previous: string | undefined) => {
  * Throws, listing every problem, unless all are `XX_YYYY_migration_name`.
  *
  * Names use lower case letters, digits and `_`. Within each major, sequences
- * run from `0001` with no gap or duplicate.
+ * run from `0001` with no gap or duplicate. Majors past 99 have no leading 0.
  */
 export const checkMigrationNames = (names: readonly string[]) => {
   const invalidNames = names.filter((name) => !namePattern.test(name));
   const validNames = names.filter((name) => namePattern.test(name));
-  const sortedNames = validNames.toSorted();
+  const sortedNames = validNames.toSorted(compareMigrationNames);
   const problems = invalidNames.map((name) => {
     return `"${name}" is not XX_YYYY_migration_name`;
   });
