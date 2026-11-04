@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@acme/node": "workspace:*",
+    "@acme/shared": "workspace:*",
     "isbot": "catalog:",
     "kysely": "catalog:"
   },
