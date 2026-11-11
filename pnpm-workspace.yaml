@@ -35,5 +35,5 @@ catalog:
   react-router: "8.5.1"
   typescript: "7.0.2"
   vite: "8.3.6"
-  vitest: "5.0.5"
+  vitest: "5.1.0"
   wrangler: "4.156.1"
