@@ -1,0 +1,6 @@
+{
+  "name": "@acme/fixture-migration-imports-db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module"
+}
