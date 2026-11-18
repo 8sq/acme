@@ -195,8 +195,8 @@ catalogs:
       specifier: 19.3.0
       version: 19.3.0
     better-sqlite3:
-      specifier: 13.0.3
-      version: 13.0.3
+      specifier: 13.2.0
+      version: 13.2.0
     isbot:
       specifier: 5.2.3
       version: 5.2.3
@@ -270,7 +270,7 @@ importers:
         version: 8.5.1(react-router@8.5.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(supports-color@10.2.2)(typescript@7.0.2)
       better-sqlite3:
         specifier: 'catalog:'
-        version: 13.0.3
+        version: 13.2.0
       pg:
         specifier: 'catalog:'
         version: 8.23.1
@@ -359,7 +359,7 @@ importers:
         version: 19.3.0(@types/react@19.3.0)
       better-sqlite3:
         specifier: 'catalog:'
-        version: 13.0.3
+        version: 13.2.0
       pg:
         specifier: 'catalog:'
         version: 8.23.1
@@ -387,7 +387,7 @@ importers:
         version: 8.23.1
       better-sqlite3:
         specifier: 'catalog:'
-        version: 13.0.3
+        version: 13.2.0
       pg:
         specifier: 'catalog:'
         version: 8.23.1
@@ -1595,8 +1595,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  better-sqlite3@13.0.3:
-    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
+  better-sqlite3@13.2.0:
+    resolution: {integrity: sha512-Z8Q/9x/uNyKxA1v4FNodyItRVRw1TeKBrmj32JhxhR0ceNcBY+wMobt/Bv7M7TzwPAXjnZRtNaEsATnUZSKWZQ==}
     engines: {node: '>=22'}
 
   blake3-wasm@2.1.5:
@@ -3334,7 +3334,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  better-sqlite3@13.0.3:
+  better-sqlite3@13.2.0:
     dependencies:
       node-addon-api: 8.9.2
 
