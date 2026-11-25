@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM node:24.22.3-trixie-slim AS build
-RUN npm install -g pnpm@12.21.0
+RUN npm install -g pnpm@12.23.0
 WORKDIR /repo
 
 # The lockfile alone keys the download layer, so editing sources skips it.
